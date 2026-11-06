@@ -31,6 +31,8 @@ Antes de revisar, lee `CLAUDE.md`, `TARGET.md` y los skills `mac-sound-playback`
 
 **PowerPC**
 - Todo callback pasa por `New...UPP`, nunca por un cast; un solo descriptor por callback.
+- Funciones que devuelven un tipo `struct` en Apple pero número en las Multiversal (`NumVersion`): en PPC corrompen memoria
+  (ADR-005, `sndver_get`).
 - Cambios de modo (Mixed Mode) en bucles calientes.
 - Sin `mftb` (el 601 no lo tiene); sin `float` fuera de `targets/`.
 - Estructuras propias que se comparten con el sistema o se leen de archivo: alineación.

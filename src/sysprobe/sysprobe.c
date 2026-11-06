@@ -18,6 +18,7 @@
 
 #include "build_info.h"
 #include "mactime.h"
+#include "sndver.h"
 #include "textlog.h"
 
 /*
@@ -136,12 +137,16 @@ static void probe_gestalt(void)
     if (gestalt("mmu", gestaltMMUType, &v))
         textlog_printf("  mmu: %s\n", (v >= 0 && v <= 4) ? kMmu[v] : "desconocida");
     /* En un PowerPC, "processor" informa el 68k emulado; la CPU real sale de aquí. */
-    if (gestalt("native_cpu", gestaltNativeCPUtype, &v))
-        textlog_printf("  cpu nativa: %s\n",
-                       v == 0x0004 ? "68040" : v == 0x0101 ? "PowerPC 601" :
-                       v == 0x0103 ? "PowerPC 603" : v == 0x0104 ? "PowerPC 604" :
-                       v == 0x0106 ? "PowerPC 603e" : v == 0x0107 ? "PowerPC 603ev" :
-                       "otra");
+    if (gestalt("native_cpu", gestaltNativeCPUtype, &v)) {
+        /* Códigos de Multiverse.h (gestaltCPU...). */
+        const char *name = v == 0x004 ? "68040" : v == 0x101 ? "PowerPC 601" :
+                           v == 0x103 ? "PowerPC 603" : v == 0x104 ? "PowerPC 604" :
+                           v == 0x106 ? "PowerPC 603e" : v == 0x107 ? "PowerPC 603ev" :
+                           v == 0x108 ? "PowerPC 750 (G3)" : v == 0x109 ? "PowerPC 604e" :
+                           v == 0x10A ? "PowerPC 604ev" : v == 0x10C ? "PowerPC G4" :
+                           "desconocida";
+        textlog_printf("  cpu nativa: %s (0x%03lX)\n", name, v);
+    }
     gestalt("sys_arch", gestaltSysArchitecture, NULL);
     gestalt("proc_clock_hz", MP_gestaltProcClkSpeed, NULL);
     if (gestalt("phys_ram", gestaltPhysicalRAMSize, &v))
@@ -265,7 +270,7 @@ static void probe_output(SndChannelPtr chan)
 
 static void probe_sound(void)
 {
-    NumVersion nv;
+    uint32_t nv;
     unsigned char v[4];
     unsigned char st[6];
     SndChannelPtr chan = NULL;
@@ -273,9 +278,12 @@ static void probe_sound(void)
 
     textlog_printf("\n[sound]\n");
 
-    /* NumVersion es struct en Universal y LONGINT en Multiversal: leer bytes. */
-    nv = SndSoundManagerVersion();
-    memcpy(v, &nv, 4);
+    /* Ver sndver.h: en PowerPC no se puede llamar a la función de versión directamente. */
+    nv = sndver_get();
+    v[0] = (unsigned char)(nv >> 24);
+    v[1] = (unsigned char)(nv >> 16);
+    v[2] = (unsigned char)(nv >> 8);
+    v[3] = (unsigned char)nv;
     textlog_printf("sound_mgr_version    %u.%u.%u stage 0x%02X rev %u\n",
                    v[0], v[1] >> 4, v[1] & 0xF, v[2], v[3]);
 

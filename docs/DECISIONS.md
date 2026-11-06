@@ -90,6 +90,13 @@ el MPW 3.5 GM con un Mac/emulador. Las Multiversal alcanzan para la etapa 0.
 - Falta el Component Manager (`FindNextComponent`, `GetSoundOutputInfo`); por eso
   `sysprobe` consulta la salida con `SndGetInfo` sobre un canal.
 - No existe `Script.h`; `NumVersion` es `LONGINT` (en Universal es un struct).
+- **Corrupción de memoria en PowerPC por esa diferencia (2026-11-06; hipótesis apoyada en el desensamblado y en
+  los bytes del log).** En el primer `sysprobe` PPC, 4 bytes `03 21 80 00` (la versión 3.2.1 del Sound Manager)
+  aparecieron sobre el texto del log. Las Multiversal declaran `SndSoundManagerVersion` como si devolviera un número;
+  en PowerPC un `struct` se devuelve por un puntero oculto en `r3`, y sin ese puntero la función escribió sobre lo que
+  `r3` tuviera (el destino del último `memcpy`). En 68k no ocurre. **Regla:** toda función cuyo retorno sea un `struct` en
+  Apple pero un número en las Multiversal se llama por una función propia de `targets/` (aquí `sndver_get`), y
+  `tools/check-numversion.sh` lo hace cumplir. Falta revisar otros retornos por valor, como `Point`.
 
 **Revisar si** la etapa 5 necesita el Component Manager o APIs posteriores a System 7.0
 (Sound Manager 3.x avanzado): entonces Víctor aporta las Universal Interfaces 3.4 desde

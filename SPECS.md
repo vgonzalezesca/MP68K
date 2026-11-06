@@ -13,7 +13,11 @@ Reproductor de audio para Mac OS clásico, en dos bifurcaciones y tres compilaci
 | PPC | `ppc` | Power Macintosh con PowerPC 601 | solo C |
 | FAT | ambas | los dos | un solo archivo con 68k y PPC |
 
-Formatos propios: MP3 (hasta 192 kbps estéreo como meta en el LC 580), FLAC, Ogg Vorbis y WMA.
+**Estado real hoy:** solo está hecho el reproductor de **MP3 en 68k** (probado en emulador, nada medido en un equipo real).
+PPC compila `sysprobe` y nada más. **FLAC, Ogg Vorbis, WMA, QuickTime, ecualizador y logo no existen todavía**: son la etapa 6
+(`docs/ETAPA6.md`). Lo que sigue es el **objetivo**, no lo que hay.
+
+Formatos propios (objetivo): MP3 (hasta 192 kbps estéreo como meta en el LC 580), FLAC, Ogg Vorbis y WMA.
 Lo demás (AIFF, WAV, SND...) a través de QuickTime. Con ecualizador de 10 bandas. El modelo de ramas está en
 `CLAUDE.md` y ADR-007; lo propio de cada equipo, en `docs/SPECS_68K.md` y `docs/SPECS_PPC.md`.
 

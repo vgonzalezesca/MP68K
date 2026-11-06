@@ -16,6 +16,8 @@ fi
 # Define TARGET, TRIPLE, APPS y target_check_app().
 source "$ROOT/targets/target.sh"
 
+"$ROOT/tools/check-numversion.sh"
+
 TOOLCHAIN_FILE=$RETRO68_BUILD/toolchain/$TRIPLE/cmake/$TOOLCHAIN_NAME
 if [[ ! -f $TOOLCHAIN_FILE ]]; then
     echo "No encuentro $TOOLCHAIN_FILE" >&2

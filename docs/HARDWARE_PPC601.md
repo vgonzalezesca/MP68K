@@ -46,6 +46,29 @@ Por confirmar según el modelo y lo que tenga instalado Víctor.
 `native_cpu` (0x0101 para un 601), `proc_clock_hz`, `fpu`, `machine`, `system`, `phys_ram`, versión del Sound Manager,
 formatos y tasas de salida.
 
+## Primera ejecución de `sysprobe` en un entorno PPC (2026-11-06)
+
+Víctor corrió `sysprobe` (compilación `ppc-7c0b67c`) y envió el resultado. **Falta saber dónde: no se sabe si es un emulador ni
+cuál.** **No es un 601 ni un dato de un equipo real:** no va a `PERF_LOG.md`.
+
+| Dato | Valor |
+|---|---|
+| `machine` | 67 ("Power Macintosh") |
+| Sistema | 8.1 |
+| CPU nativa (`cput`) | 268 = G4 según Multiverse.h |
+| Reloj (`pclk`) | 100 000 000 Hz informado (100 MHz) |
+| RAM / ROM | 16 MB / 3 MB |
+| Sound Manager | 3.2.1, Component Manager 6, `snd ` = 0x1FFF |
+| Salida | **solo 22 050 Hz, 16 bits, 1 canal** (`srav`, `ssav`, `chav`, `hwfm`) |
+| `usec_por_60_ticks` | 1 053 999 (esperado ~997 500): 5,7 % lento |
+| `proc` | 68020 (el 68k emulado, normal en PowerPC) |
+
+Consecuencias:
+- El reloj lento sugiere un emulador. Nada de esto sirve para decidir rendimiento.
+- `audio_open` no negocia tasa ni canales: en este entorno pediría estéreo y no existe. Va a la 6-PPC.
+- Mostró una corrupción de memoria en PowerPC con `NumVersion` (ADR-005): corregida con `sndver_get`, por confirmar en una
+  segunda corrida.
+
 ## Fuentes
 
 - [EveryMac: Power Macintosh 6100/60](https://everymac.com/systems/apple/powermac/specs/powermac_6100_60.html)

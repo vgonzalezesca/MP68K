@@ -24,6 +24,7 @@
 #include "player.h"
 #include "playlist.h"
 #include "ui_about.h"
+#include "ui_eq.h"
 #include "ui_list.h"
 #include "ui_main.h"
 
@@ -446,11 +447,16 @@ static void update_menus(void)
     CheckItem(mo, OPT_OUT_16, gOutBits == 16);
     CheckItem(mo, OPT_TECH_INFO, gDebug);
     CheckItem(mw, 1, ui_list_visible());
+    CheckItem(mw, 2, ui_eq_visible());
 }
 
 static void close_front_window(void)
 {
-    if (ui_list_visible() && FrontWindow() == ui_list_window()) {
+    if (ui_about_window() != NULL && FrontWindow() == ui_about_window()) {
+        ui_about_close();
+    } else if (ui_eq_visible() && FrontWindow() == ui_eq_window()) {
+        ui_eq_show(false);
+    } else if (ui_list_visible() && FrontWindow() == ui_list_window()) {
         ui_list_show(false);
         sync_modes();
     } else {
@@ -515,6 +521,8 @@ static void do_menu(long result)
     case MENU_WINDOW:
         if (item == 1)
             toggle_list_window();
+        else if (item == 2)
+            ui_eq_show(!ui_eq_visible());
         break;
     }
     HiliteMenu(0);
@@ -579,6 +587,8 @@ static void do_mouse_down(EventRecord *evt)
         if (TrackGoAway(win, evt->where)) {
             if (win == ui_about_window()) {
                 ui_about_close();
+            } else if (win == ui_eq_window()) {
+                ui_eq_show(false);
             } else if (win == ui_list_window()) {
                 ui_list_show(false);
                 sync_modes();
@@ -599,6 +609,8 @@ static void do_mouse_down(EventRecord *evt)
                 ui_main_click(p);
             else if (win == ui_list_window())
                 ui_list_click(p, evt->when);
+            else if (win == ui_eq_window())
+                ui_eq_click(p);
             else if (win == ui_about_window())
                 ui_about_close();
         }
@@ -627,6 +639,8 @@ static void handle_event(EventRecord *evt)
             ui_main_draw_all();
         else if (w == ui_list_window())
             ui_list_draw_all();
+        else if (w == ui_eq_window())
+            ui_eq_draw_all();
         else if (w == ui_about_window())
             ui_about_draw();
         EndUpdate(w);
@@ -686,6 +700,8 @@ int main(void)
     err = ui_main_create();
     if (err == noErr)
         err = ui_list_create();
+    if (err == noErr)
+        err = ui_eq_create();
     if (err != noErr) {
         show_error("The windows could not be created.", err);
         player_shutdown();
@@ -703,6 +719,7 @@ int main(void)
 
         player_idle();
         ui_main_tick();
+        ui_eq_tick();
 
         /* Fin de pista: seguir con la siguiente según el orden y el modo de repetición. */
         st = player_status();
@@ -716,6 +733,7 @@ int main(void)
 
     player_shutdown();
     playlist_shutdown();
+    ui_eq_destroy();
     ui_list_destroy();
     ui_main_destroy();
     return 0;

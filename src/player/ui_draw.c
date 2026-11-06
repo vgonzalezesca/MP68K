@@ -325,6 +325,69 @@ unsigned ui_slider_pos(const Rect *track, short x)
     return (unsigned)(p * 1000 / span);
 }
 
+#define THUMB_H 12
+
+void ui_vslider(const Rect *col, unsigned pos_x1000, Boolean enabled)
+{
+    Rect groove, thumb;
+    short cx = (short)((col->left + col->right) / 2);
+    short span = (short)(col->bottom - col->top - THUMB_H);
+    short y, gy, tick;
+
+    ui_fill(col, &kPlatBg);
+    SetRect(&groove, (short)(cx - 3), (short)(col->top + THUMB_H / 2), (short)(cx + 3), (short)(col->bottom - THUMB_H / 2));
+    ui_well(&groove, enabled ? &kPlatWhite : &kFaceTop);
+    /* marcas en +12 dB (arriba), 0 y -12 dB (abajo) */
+    for (tick = 0; tick < 3; tick++) {
+        short ty = (short)(groove.top + (long)(groove.bottom - groove.top - 1) * tick / 2);
+
+        hline(col->left, (short)(cx - 5), ty, &kSh1);
+        hline((short)(cx + 5), col->right, ty, &kSh1);
+    }
+    if (pos_x1000 > 1000)
+        pos_x1000 = 1000;
+    y = (short)(col->top + (long)span * pos_x1000 / 1000);
+    SetRect(&thumb, col->left, y, col->right, (short)(y + THUMB_H));
+    ui_push_frame(&thumb, false);
+    if (enabled) {
+        for (gy = (short)(y + 4); gy <= (short)(y + 7); gy += 2) {
+            hline((short)(col->left + 4), (short)(col->right - 4), gy, &kSh1);
+            hline((short)(col->left + 4), (short)(col->right - 4), (short)(gy + 1), &kPlatWhite);
+        }
+    }
+}
+
+unsigned ui_vslider_pos(const Rect *col, short y)
+{
+    long span = col->bottom - col->top - THUMB_H;
+    long p = y - col->top - THUMB_H / 2;
+
+    if (span <= 0 || p <= 0)
+        return 0;
+    if (p >= span)
+        return 1000;
+    return (unsigned)(p * 1000 / span);
+}
+
+void ui_checkbox(const Rect *box, const Rect *label_clip, const char *label, Boolean on, Boolean enabled)
+{
+    short x;
+
+    ui_fill(label_clip, &kPlatBg);
+    ui_well(box, enabled ? &kPlatWhite : &kFaceTop);
+    if (on) {
+        fore(enabled ? &kPlatBlack : &kPlatDim);
+        PenSize(2, 2);
+        MoveTo((short)(box->left + 3), (short)(box->top + 3));
+        LineTo((short)(box->right - 5), (short)(box->bottom - 5));
+        MoveTo((short)(box->right - 5), (short)(box->top + 3));
+        LineTo((short)(box->left + 3), (short)(box->bottom - 5));
+        PenNormal();
+    }
+    x = (short)(box->right + 6);
+    ui_text(label_clip, x, (short)(box->bottom - 1), label, enabled ? &kPlatText : &kPlatDim, &kPlatBg, UI_FONT_SYSTEM, 12);
+}
+
 void ui_play_marker(short x, short y, const RGBColor *c)
 {
     fore(c);

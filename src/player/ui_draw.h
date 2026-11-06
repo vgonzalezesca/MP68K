@@ -53,6 +53,16 @@ void ui_slider(const Rect *track, unsigned pos_x1000, Boolean enabled);
 /* Posición (0..1000) que corresponde a la coordenada x del ratón sobre `track`. */
 unsigned ui_slider_pos(const Rect *track, short x);
 
+/*
+ * Deslizador vertical (ecualizador): ranura hundida con marcas en +12, 0 y -12, y perilla. pos_x1000 va de 0
+ * (arriba) a 1000 (abajo). La columna `col` mide 18 px de ancho.
+ */
+void ui_vslider(const Rect *col, unsigned pos_x1000, Boolean enabled);
+/* Posición (0..1000) que corresponde a la coordenada y del ratón sobre `col`. */
+unsigned ui_vslider_pos(const Rect *col, short y);
+/* Casilla de 12x12 en (left, top) con su rótulo a la derecha dentro de `label_clip`. */
+void ui_checkbox(const Rect *box, const Rect *label_clip, const char *label, Boolean on, Boolean enabled);
+
 /* Marcador de "pista actual" (triángulo) con la esquina superior izquierda en (x, y). */
 void ui_play_marker(short x, short y, const RGBColor *c);
 

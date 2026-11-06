@@ -54,6 +54,7 @@ static struct {
     unsigned long under_total_base;     /* underruns acumulados al abrir la pista */
     uint64_t last_idle_us;              /* instante de la llamada anterior a player_idle (0 = no medir) */
     unsigned long max_gap_ms;
+    unsigned fill_ms;                   /* 0 = llenar el anillo; si no, colchón objetivo */
     PlayerStatus st;
 } P;
 
@@ -523,9 +524,37 @@ void player_set_balance(int balance)
     apply_gain();
 }
 
+/* Cuadros de colchón que se quieren por delante; 0 = sin tope (el anillo entero). */
+static long fill_frames(void)
+{
+    return P.fill_ms ? (long)((unsigned long)P.st.out_rate * P.fill_ms / 1000UL) : 0;
+}
+
+static Boolean wants_more(void)
+{
+    long fill = fill_frames();
+
+    return audio_space_frames() >= MAX_FRAME_FRAMES && (fill == 0 || audio_buffered_frames() < fill);
+}
+
+void player_set_eq(const EqSettings *s)
+{
+    eq_set(s);
+}
+
+const EqSettings *player_get_eq(void)
+{
+    return eq_get();
+}
+
+void player_set_fill_target_ms(unsigned ms)
+{
+    P.fill_ms = ms;
+}
+
 Boolean player_wants_cpu(void)
 {
-    return P.st.state != PLAYER_STOPPED && !P.draining && audio_space_frames() >= MAX_FRAME_FRAMES;
+    return P.st.state != PLAYER_STOPPED && !P.draining && wants_more();
 }
 
 void player_idle(void)
@@ -563,7 +592,7 @@ void player_idle(void)
     }
 
     start = mactime_usec();
-    while (audio_space_frames() >= MAX_FRAME_FRAMES) {
+    while (wants_more()) {
         int rc = P.codec->next(&P.f);
 
         if (rc == 0) {

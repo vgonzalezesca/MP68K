@@ -62,6 +62,7 @@ static void draw_logo(short left, short top)
     PixMap pm;
     Rect src, dst;
     CTabHandle clut;
+    RGBColor white, bg;
 
     if (h == NULL || GetHandleSize(h) < (Size)LOGO_SIZE * LOGO_SIZE)
         return;
@@ -84,9 +85,11 @@ static void draw_logo(short left, short top)
 
     SetRect(&src, 0, 0, LOGO_SIZE, LOGO_SIZE);
     SetRect(&dst, left, top, left + LOGO_SIZE, top + LOGO_SIZE);
-    RGBBackColor(&kPlatWhite);
+    white = kPlatWhite;                      /* RGBBackColor no recibe const */
+    bg = kPlatBg;
+    RGBBackColor(&white);
     CopyBits((BitMap *)&pm, (BitMap *)*((CGrafPtr)gWin)->portPixMap, &src, &dst, transparent, NULL);
-    RGBBackColor(&kPlatBg);
+    RGBBackColor(&bg);
     HUnlock(h);
     DisposeCTable(clut);
 }

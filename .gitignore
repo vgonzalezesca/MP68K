@@ -20,5 +20,6 @@ bench_results*.txt
 # etapa 2: MP3 y PCM generados; solo se conserva la referencia de CRC
 tests/data/*
 !tests/data/REFERENCE.txt
+!tests/data/REFERENCE_CODECS.txt
 build-host/
 __pycache__/

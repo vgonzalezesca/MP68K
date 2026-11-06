@@ -190,6 +190,15 @@ target_include_directories(codecs PUBLIC src ${DRFLAC_DIR})
 target_link_libraries(codecs PUBLIC decoder_core)
 set_source_files_properties(src/dr_flac_impl.c PROPERTIES COMPILE_OPTIONS -w)
 
+# --- Etapa 6: banco de los códecs (velocidad y CRC contra el PC, sin audio) ------
+if(codecbench IN_LIST MP368K_APPS)
+    add_application(codecbench
+        bench/codecbench.c
+        CONSOLE
+        CREATOR "M368")
+    target_link_libraries(codecbench codecs mp368k_common)
+endif()
+
 # --- Etapa 5b: el reproductor ---------------------------------------------------
 if(mp368k IN_LIST MP368K_APPS)
     add_library(player_engine STATIC src/player/player.c src/order.c)

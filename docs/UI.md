@@ -94,6 +94,18 @@ Options (Audio Output: Automatic / 8-bit / 16-bit, Show Technical Info) · Windo
   búsqueda lineal.
 - Hasta 512 entradas. Siguiente/Anterior, Shuffle y Repeat siguen `src/order.c` (probado en el PC).
 
+## Formatos de audio (6-G, fase 2: compilado, sin ver en pantalla)
+
+- El motor reconoce el formato **por el contenido** (`codec_probe_any`), no por la extensión: MP3 y FLAC. Add Folder… usa la
+  extensión o el tipo de archivo de Mac solo para decidir qué ofrecer.
+- La línea de formato muestra, según el códec: MP3 → `128 kbps  44.1 kHz  Stereo  FULL`; FLAC → `FLAC  16-bit  44.1 kHz  Stereo`.
+- **El menú Quality solo actúa sobre MP3** (los perfiles FULL/HALF/MONO son de libmad): con un FLAC abierto sus ítems quedan
+  desactivados.
+- Si la velocidad medida al empezar una pista no alcanza para tiempo real (RTF < 1,0), la línea del artista dice
+  **"May not play in real time"**. Es una medición del equipo donde se corre: en el emulador no dice nada sobre el LC 580.
+- Con Show Technical Info la línea técnica agrega `mem NNK` (pico del arena de los códecs).
+- Límites con mensaje claro: más de 2 canales o una tasa fuera de 8–48 kHz ("…only play audio with 1 or 2 channels…").
+
 ## Logo e ícono (6-G, fase 1: compilado, sin ver en pantalla)
 
 - **Origen:** la imagen de referencia de Víctor (`assets/logo/reference.png`): anillos concéntricos verde azulado sobre una

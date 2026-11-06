@@ -8,8 +8,9 @@ Reproductor personal (uso propio, GPL) con dos equipos de referencia, en dos bif
 | `ppc` | **Power Macintosh con PowerPC 601** (modelo por confirmar; se diseña para 60 MHz) | solo C |
 | `master` | general: lo que comparten ambos | C portable |
 
-**Estado real:** hoy solo existe el reproductor de MP3 en 68k. PPC compila `sysprobe` y nada más; FLAC, Vorbis, WMA,
-QuickTime y el ecualizador son la etapa 6 y **no están hechos** (`docs/ETAPA6.md`).
+**Estado real:** el reproductor de MP3 en 68k existe y se probó en emulador. FLAC y la capa de códecs están compilados y
+probados solo en el PC (falta verlos sonar en un Mac). PPC compila `sysprobe` y nada más; Vorbis, WMA, QuickTime y el
+ecualizador son la etapa 6 y **no están hechos** (`docs/ETAPA6.md`).
 
 Objetivo: MP3 hasta 192 kbps estéreo, FLAC, Ogg Vorbis, WMA y otros formatos vía QuickTime, con la mayor
 calidad que cada equipo permita en tiempo real. Mac OS clásico, no A/UX ni Mac OS X. Tres compilaciones:

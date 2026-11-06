@@ -200,6 +200,16 @@ con `decprofile` del emulador como guía débil. El selector permite compararlos
   MPlayer-dev de 2008 reporta ruido audible en algunos flujos: probarla contra `ffmpeg`.
 - **FLAC:** elegir tras leer el código; candidatas: dr_flac, libFLAC y la de Rockbox.
 
+**Resolución de FLAC (2026-11-06).** Se eligió **dr_flac 0.13.4** (dominio público o MIT-0) tras leer su código: toda la
+decodificación es entera; acepta asignadores propios (se le da un arena, ~36 KB de pico medido en el PC); `onTell` es
+opcional; usa `long long` para la caché de bits (en el 68k cuesta llamadas a libgcc, **sin medir**). Trae `float`/`double`
+en las rutas de salida `f32` (que no se llaman y desaparecen con `-gc-sections`) y **también en la búsqueda binaria**
+(`/8.0f`, un factor `0.6f` y un `double`): eso último sí se ejecuta, y lo descubrió `targets/check-nosoftfloat.sh` sobre el
+binario enlazado, no una lectura del código. `tools/prepare-dr-flac.sh` genera una copia con esos cuatro puntos en aritmética
+entera; el original no se modifica. La búsqueda sigue exacta (probada con y sin SEEKTABLE, 32 y 64 bits). Límites: hasta 2
+canales y de 8 a 48 kHz; 24 bits se reducen a 16 sin redondeo. Las etiquetas y la duración las lee un lector propio, para que
+una carátula grande no pase por el arena. Ogg Vorbis y WMA siguen pendientes de leer su código y su licencia.
+
 **Consecuencias.** Más memoria y más código, lo que agrava la regla de 32 KB por segmento. Tremor y WMA pueden asignar
 memoria durante la decodificación: hay que revisarlo contra las reglas 6 y 7. Vorbis y WMA pueden no alcanzar tiempo real
 en el 68LC040 (sin medir). El código WMA deriva de ingeniería inversa: revisar antes de distribuir binarios.

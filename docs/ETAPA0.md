@@ -7,7 +7,7 @@ el LC 580 (¿8 o 16 bits?, ¿qué tasas?) antes de decidir el perfil de calidad.
 
 ```sh
 sudo pacman -S --needed boost ruby      # lo único que faltaba al 2026-10-29
-tools/build-toolchain.sh                 # 30-60 min; log en ~/Retro68-build/build-toolchain.log
+tools/build-toolchain.sh                 # 11 min con 12 hilos; log en ~/Retro68-build/build-toolchain.log
 ```
 
 ## 2. Compilar

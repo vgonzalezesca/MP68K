@@ -1,0 +1,26 @@
+# Íconos de MP368K, dibujados píxel a píxel. Cada letra es un color EXACTO de la paleta del sistema.
+# '.' = transparente (fuera de la máscara). Luz desde arriba a la izquierda.
+K=003333 contorno y trazo oscuro
+D=336666 sombra propia
+M=339999 tono medio
+L=66CCCC luz
+H=CCFFFF reflejo y anillos
+G=99CC99 colina clara
+g=66CC99 colina oscura
+S=999999 sombra proyectada
+................
+.....KKKKK......
+....KKLLMMKK....
+...KLLHHHMMDK...
+..KLLHMMMHMDKK..
+..KLMHMHMHMMDKS.
+.KMMMHMMMHMMDKS.
+.KMMMMHHHMMDDKS.
+.KMMMMMMMMGGGKS.
+..KMMMMMGGGGGKS.
+..KMMMGGGGGGKKS.
+...KGGGGGGGGKSS.
+....KKGGGGKKSS..
+.....KKKKKSSS...
+......SSSSS.....
+................

@@ -265,8 +265,10 @@ solo lo prueba Víctor**, primero con `sysprobe`.
 
 **Contexto.** Víctor pidió un logo parecido a una imagen suya, optimizado a la paleta de 256 colores de Mac OS 8.
 
-**Decisión.** `tools/make_logo.py` redibuja el motivo a cada tamaño y lo cuantiza a la paleta estándar de 8 bits (clut 8), en
-vez de reducir la imagen. Los recursos van en `src/player/icons.r` (generado y versionado). El About dibuja `LOGO` con la
+**Decisión.** Dirección "Platinum con contorno" (elegida por Víctor). Los íconos de 16 y 32 px se **dibujan a mano**, píxel por píxel,
+en `assets/logo/icon*.txt` (colores exactos de la paleta del sistema, sin difuminado); `tools/make_logo.py` los convierte a `icl8`, `ics8`,
+`icl4`, `ics4`, `ICN#` e `ics#`, y dibuja por procedimiento solo el logo grande (96×96). Antes se redibujaba todo por procedimiento y a 16 y
+32 px salía una mancha sin contorno. Los recursos van en `src/player/icons.r` (generado y versionado). El About dibuja `LOGO` con la
 tabla de colores del sistema, no con un `PICT`. `tools/set_bundle_bit.py` activa el bit de bundle porque Retro68 no lo hace.
 
 **Consecuencias.** El orden de índices de la paleta es un **supuesto sin verificar** (documentado en el script y en `docs/UI.md`).

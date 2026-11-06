@@ -6,26 +6,24 @@
 #include <stdio.h>
 #include <string.h>
 
-OSErr trackinfo_probe(FileReader *fr, uint8_t *buf, long cap, Id3Tags *tg, Mp3Info *mi)
+OSErr trackinfo_probe(FileReader *fr, CodecIO *io, uint8_t *buf, long cap, CodecInfo *ci, const Codec **codec)
 {
-    uint8_t v1[128];
-    long got = 0, v2 = 0, size = fr->size;
-    long want = cap < 8192 ? cap : 8192;
-    int has_v1 = 0;
+    int err = 0;
 
-    memset(tg, 0, sizeof *tg);
-    if (fileread_seek(fr, 0) != 0 || fileread_read(fr, buf, want, &got) != 0)
-        return ioErr;
-    v2 = id3_parse_v2(buf, (size_t)got, tg);        /* 0 si no hay; tolera etiquetas truncadas */
-    if (size >= 128 && fileread_seek(fr, size - 128) == 0) {
-        long n = 0;
-
-        if (fileread_read(fr, v1, 128, &n) == 0 && n == 128)
-            has_v1 = id3_parse_v1(v1, tg);
+    io->read = fileread_read;
+    io->seek = fileread_seek;
+    io->ctx = fr;
+    io->size = fr->size;
+    io->audio_start = 0;
+    *codec = codec_probe_any(io, buf, cap, ci, &err);
+    if (*codec != NULL)
+        return noErr;
+    switch (err) {
+    case CODEC_ERR_IO:     return ioErr;
+    case CODEC_ERR_PARAMS: return TRACKINFO_ERR_PARAMS;
+    case CODEC_ERR_MEMORY: return memFullErr;
+    default:               return TRACKINFO_ERR_UNSUPPORTED;
     }
-    if (v2 >= size || fileread_seek(fr, v2) != 0 || fileread_read(fr, buf, want, &got) != 0)
-        return ioErr;
-    return mp3info_parse(buf, (size_t)got, v2, size, has_v1, mi) == 0 ? noErr : TRACKINFO_ERR_NOT_MP3;
 }
 
 void trackinfo_name_without_extension(const char *name, char *out, size_t cap)

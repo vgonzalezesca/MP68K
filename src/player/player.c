@@ -8,12 +8,14 @@
 #include <string.h>
 
 #include "audio.h"
+#include "codec.h"
 #include "fileread.h"
 #include "trackinfo.h"
 #include "mactime.h"
 #include "memblock.h"
 
 #define READ_BUF_BYTES   (32L * 1024)
+#define CODEC_ARENA_BYTES (256L * 1024)    /* memoria de los códecs de terceros; FLAC usa ~36 KB (medido en el PC) */
 #define APP_RING_MS      4000       /* colchón para menús y arrastres que bloquean el bucle */
 #define PREROLL_MS       250
 #define IDLE_BUDGET_US   20000UL    /* tope por llamada: eventos al menos cada ~50 ms (RNF2) */
@@ -36,8 +38,11 @@ static struct {
     FileReader fr;
     Boolean fileOpen;
     MemBlock rbuf;
+    MemBlock arena;                     /* memoria de los códecs */
     FSSpec spec;
-    Mp3Info mi;                         /* datos del archivo abierto */
+    const Codec *codec;                 /* códec del archivo abierto */
+    CodecIO io;
+    CodecInfo ci;                       /* datos del archivo abierto */
     DecFrame f;
     Boolean audioOpen;
     Boolean draining;
@@ -74,12 +79,6 @@ static void apply_gain(void)
     else if (P.balance < 0)
         r = (unsigned)((unsigned long)g * (100 + P.balance) / 100);
     audio_set_gain(l, r);
-}
-
-/* Byte del archivo donde está el instante ms: tabla de Xing si hay; si no, lineal (exacta en CBR). */
-static long offset_for_ms(unsigned long ms)
-{
-    return mp3info_offset_for_ms(&P.mi, ms);
 }
 
 static DecProfile profile_for_quality(PlayerQuality q)
@@ -126,7 +125,18 @@ static int put_frame(const DecFrame *f)
 
 static void close_stream(void)
 {
-    dec_stream_close();
+    if (P.codec != NULL)
+        P.codec->close();
+}
+
+static OSErr codec_error(int rc)
+{
+    switch (rc) {
+    case CODEC_ERR_PARAMS: return PLAYER_ERR_PARAMS;
+    case CODEC_ERR_MEMORY: return memFullErr;
+    case CODEC_ERR_UNSUPPORTED: return PLAYER_ERR_UNSUPPORTED;
+    default: return ioErr;
+    }
 }
 
 static void stop_internal(void)
@@ -151,13 +161,13 @@ static OSErr open_stream_at(DecProfile prof, unsigned long ms, DecFrame *first)
     int rc;
 
     close_stream();
-    if (dec_stream_open(prof, fileread_read, fileread_seek, &P.fr, (uint8_t *)P.rbuf.data,
-                        (size_t)P.rbuf.size) != 0)
+    rc = P.codec->open(&P.io, prof, (uint8_t *)P.rbuf.data, (size_t)P.rbuf.size, &P.ci);
+    if (rc != CODEC_OK)
+        return codec_error(rc);
+    if (ms > 0 && P.codec->seek(ms) != CODEC_OK)
         return ioErr;
-    if (ms > 0 && dec_stream_seek(offset_for_ms(ms)) != 0)
-        return ioErr;
-    rc = dec_stream_next(first);
-    return rc == 1 ? noErr : PLAYER_ERR_NOT_MP3;
+    rc = P.codec->next(first);
+    return rc == 1 ? noErr : PLAYER_ERR_UNSUPPORTED;
 }
 
 /*
@@ -205,7 +215,7 @@ static OSErr restart_at_ms(unsigned long ms, DecProfile prof, Boolean keep_pause
     P.st.frames_decoded++;
     need = (unsigned long long)f->rate * PREROLL_MS / 1000;
     while ((unsigned long long)audio_buffered_frames() < need) {
-        rc = dec_stream_next(f);
+        rc = P.codec->next(f);
         if (rc != 1) {
             P.draining = true;
             audio_finish();
@@ -239,17 +249,15 @@ static unsigned probe_rtf_x100(DecProfile prof)
     int k;
 
     close_stream();
-    if (dec_stream_open(prof, fileread_read, fileread_seek, &P.fr, (uint8_t *)P.rbuf.data,
-                        (size_t)P.rbuf.size) != 0)
+    if (P.codec->open(&P.io, prof, (uint8_t *)P.rbuf.data, (size_t)P.rbuf.size, &P.ci) != CODEC_OK)
         return 0;
-    if (dec_stream_seek(offset_for_ms((unsigned long)((unsigned long long)P.st.duration_ms *
-                                                       PROBE_AT_X1000 / 1000))) != 0) {
+    if (P.codec->seek((unsigned long)((unsigned long long)P.st.duration_ms * PROBE_AT_X1000 / 1000)) != CODEC_OK) {
         close_stream();
         return 0;
     }
     for (k = 0; k < PROBE_FRAMES; k++) {
         uint64_t t0 = mactime_usec();
-        int rc = dec_stream_next(&f);
+        int rc = P.codec->next(&f);
         uint64_t dt = mactime_usec() - t0;
 
         if (rc != 1)
@@ -299,6 +307,12 @@ OSErr player_init(void)
     err = memblock_alloc(&P.rbuf, READ_BUF_BYTES);
     if (err != noErr)
         return err;
+    err = memblock_alloc(&P.arena, CODEC_ARENA_BYTES);
+    if (err != noErr) {
+        memblock_free(&P.rbuf);
+        return err;
+    }
+    codec_init(P.arena.data, (size_t)P.arena.size);
     P.volume = 100;
     P.balance = 0;
     P.st.quality = QUALITY_AUTO;
@@ -316,13 +330,13 @@ void player_shutdown(void)
         fileread_close(&P.fr);
         P.fileOpen = false;
     }
+    memblock_free(&P.arena);
     memblock_free(&P.rbuf);
     P.inited = false;
 }
 
 OSErr player_open(FSSpec *spec)
 {
-    Id3Tags tg;
     OSErr err;
     PlayerQuality q = P.st.quality;
     int n;
@@ -351,28 +365,30 @@ OSErr player_open(FSSpec *spec)
     memcpy(P.st.name, spec->name + 1, n);
     P.st.name[n] = '\0';
 
-    err = trackinfo_probe(&P.fr, (uint8_t *)P.rbuf.data, P.rbuf.size, &tg, &P.mi);
+    err = trackinfo_probe(&P.fr, &P.io, (uint8_t *)P.rbuf.data, P.rbuf.size, &P.ci, &P.codec);
     if (err != noErr) {
         fileread_close(&P.fr);
         P.fileOpen = false;
+        P.codec = NULL;
         P.st.last_error = err;
         return err;
     }
 
-    if (tg.title[0] != '\0')
-        strcpy(P.st.title, tg.title);
+    if (P.ci.tags.title[0] != '\0')
+        strcpy(P.st.title, P.ci.tags.title);
     else
         trackinfo_name_without_extension(P.st.name, P.st.title, sizeof P.st.title);
-    strcpy(P.st.artist, tg.artist);
+    strcpy(P.st.artist, P.ci.tags.artist);
 
-    P.st.vbr = P.mi.is_vbr != 0;
-    P.st.in_rate = P.mi.sample_rate;
-    P.st.in_channels = P.mi.channels;
-    P.st.duration_ms = P.mi.duration_ms;
-    /* En VBR el bitrate del primer frame no dice nada: se muestra el promedio. */
-    P.st.bitrate = (P.st.vbr && P.mi.duration_ms)
-        ? (unsigned)((unsigned long long)P.mi.audio_bytes * 8000ULL / P.mi.duration_ms)
-        : P.mi.bitrate;
+    strcpy(P.st.format, P.ci.format);
+    P.st.has_profiles = P.ci.has_profiles != 0;
+    P.st.eq_available = P.ci.eq_capable != 0;
+    P.st.bits_src = P.ci.bits_src;
+    P.st.vbr = P.ci.vbr != 0;
+    P.st.in_rate = P.ci.rate;
+    P.st.in_channels = P.ci.channels;
+    P.st.duration_ms = P.ci.duration_ms;
+    P.st.bitrate = P.ci.bitrate;
 
     P.st.has_file = true;
     P.st.state = PLAYER_STOPPED;
@@ -396,11 +412,21 @@ OSErr player_play(void)
         return noErr;
 
     P.st.auto_degraded = false;
+    P.st.may_stutter = false;
     P.under_total_base = audio_underruns();
-    if (P.st.quality == QUALITY_AUTO)
+    if (!P.ci.has_profiles) {
+        /* Sin perfiles no hay a qué bajar: se mide la velocidad solo para avisar si no alcanza. */
+        unsigned rtf = probe_rtf_x100(DEC_PROFILE_FULL);
+
+        P.st.preroll_rtf_x100 = rtf;
+        P.st.may_stutter = rtf != 0 && rtf < 100;
+        prof = DEC_PROFILE_FULL;
+    } else if (P.st.quality == QUALITY_AUTO) {
         prof = auto_pick();
-    else
+        P.st.may_stutter = P.st.preroll_rtf_x100 != 0 && P.st.preroll_rtf_x100 < 100;
+    } else {
         prof = profile_for_quality(P.st.quality);
+    }
     err = restart_at_ms(0, prof, false);
     if (err != noErr) {
         P.st.last_error = err;
@@ -451,7 +477,7 @@ void player_set_quality(PlayerQuality q)
     if ((unsigned)q >= QUALITY_COUNT)
         return;
     P.st.quality = q;
-    if (P.st.state != PLAYER_STOPPED && q != QUALITY_AUTO) {
+    if (P.st.state != PLAYER_STOPPED && q != QUALITY_AUTO && P.ci.has_profiles) {
         DecProfile want = profile_for_quality(q);
 
         if (want != P.st.profile) {
@@ -538,7 +564,7 @@ void player_idle(void)
 
     start = mactime_usec();
     while (audio_space_frames() >= MAX_FRAME_FRAMES) {
-        int rc = dec_stream_next(&P.f);
+        int rc = P.codec->next(&P.f);
 
         if (rc == 0) {
             P.draining = true;
@@ -561,7 +587,7 @@ void player_idle(void)
     }
 
     /* Modo automático: si hay cortes repetidos, bajar un perfil en la posición actual. */
-    if (P.st.quality == QUALITY_AUTO && P.st.state == PLAYER_PLAYING && !P.draining) {
+    if (P.ci.has_profiles && P.st.quality == QUALITY_AUTO && P.st.state == PLAYER_PLAYING && !P.draining) {
         unsigned long now = TickCount();
         unsigned long u = audio_underruns();
 
@@ -603,5 +629,6 @@ const PlayerStatus *player_status(void)
         s->position_ms = s->duration_ms;
     s->underruns = audio_underruns() - P.under_total_base;
     s->max_gap_ms = P.max_gap_ms;
+    s->arena_peak = (unsigned long)codec_arena()->peak;
     return s;
 }

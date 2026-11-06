@@ -96,8 +96,16 @@ static void show_error(const char *what, OSErr err)
 
 static const char *play_error_text(OSErr err)
 {
-    return err == PLAYER_ERR_NOT_MP3 ? "This does not look like a valid MP3 file."
-                                     : "The file could not be played.";
+    switch (err) {
+    case PLAYER_ERR_UNSUPPORTED:
+        return "This file is not in a supported audio format (MP3 or FLAC), or it is damaged.";
+    case PLAYER_ERR_PARAMS:
+        return "This player can only play audio with 1 or 2 channels and a sample rate from 8 to 48 kHz.";
+    case memFullErr:
+        return "There is not enough memory to open this file.";
+    default:
+        return "The file could not be played.";
+    }
 }
 
 /* ------------------------------------------------------------------------ */
@@ -231,10 +239,10 @@ static unsigned add_from_reply(StandardFileReply *reply, Boolean folder)
     InitCursor();
 
     if (added == 0) {
-        alert_text(folder ? "No playable MP3 files were found in that folder."
-                          : "No playable MP3 files were found.", true);
+        alert_text(folder ? "No playable audio files were found in that folder."
+                          : "No playable audio files were found.", true);
     } else if (skipped > 0) {
-        snprintf(msg, sizeof msg, "%u of the entries could not be added because the files were not found or are not valid MP3 files.", skipped);
+        snprintf(msg, sizeof msg, "%u of the entries could not be added because the files were not found or are not in a supported audio format.", skipped);
         alert_text(msg, false);
     }
     return added;
@@ -429,8 +437,10 @@ static void update_menus(void)
     CheckItem(mc, CTL_REPEAT_OFF, o->repeat == REPEAT_OFF);
     CheckItem(mc, CTL_REPEAT_ALL, o->repeat == REPEAT_ALL);
     CheckItem(mc, CTL_REPEAT_ONE, o->repeat == REPEAT_ONE);
-    for (i = 1; i <= QUALITY_COUNT; i++)
+    for (i = 1; i <= QUALITY_COUNT; i++) {
         CheckItem(mq, i, st->quality == (PlayerQuality)(i - 1));
+        enable(mq, i, !st->has_file || st->has_profiles);      /* los perfiles son solo del MP3 */
+    }
     CheckItem(mo, OPT_OUT_AUTO, gOutBits == 0);
     CheckItem(mo, OPT_OUT_8, gOutBits == 8);
     CheckItem(mo, OPT_OUT_16, gOutBits == 16);

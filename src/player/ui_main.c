@@ -125,22 +125,31 @@ static void build_format(const PlayerStatus *st, char *out, size_t n)
         return;
     }
     if (gDebug && st->state != PLAYER_STOPPED) {
-        snprintf(out, n, "buf %ld  und %lu  gap %lu  rtf %lu.%02lu", st->buffered_ms, st->underruns,
-                 st->max_gap_ms, st->preroll_rtf_x100 / 100, st->preroll_rtf_x100 % 100);
+        snprintf(out, n, "buf %ld  und %lu  gap %lu  rtf %lu.%02lu  mem %luK", st->buffered_ms, st->underruns,
+                 st->max_gap_ms, st->preroll_rtf_x100 / 100, st->preroll_rtf_x100 % 100,
+                 st->arena_peak / 1024);
         return;
     }
     {
         const char *ch = st->out_channels ? (st->out_channels == 2 ? "Stereo" : "Mono")
                                           : (st->in_channels == 2 ? "Stereo" : "Mono");
         unsigned rate = st->out_rate ? st->out_rate : st->in_rate;
-        char kbps[24];
 
-        if (st->vbr)
-            snprintf(kbps, sizeof kbps, "VBR %u kbps", st->bitrate / 1000);
-        else
-            snprintf(kbps, sizeof kbps, "%u kbps", st->bitrate / 1000);
-        snprintf(out, n, "%s  %u.%u kHz  %s  %s%s", kbps, rate / 1000, (rate % 1000) / 100, ch,
-                 dec_profile_name(st->profile), st->auto_degraded ? "*" : "");
+        if (st->has_profiles) {
+            char kbps[24];
+
+            if (st->vbr)
+                snprintf(kbps, sizeof kbps, "VBR %u kbps", st->bitrate / 1000);
+            else
+                snprintf(kbps, sizeof kbps, "%u kbps", st->bitrate / 1000);
+            snprintf(out, n, "%s  %u.%u kHz  %s  %s%s", kbps, rate / 1000, (rate % 1000) / 100, ch,
+                     dec_profile_name(st->profile), st->auto_degraded ? "*" : "");
+        } else if (st->bits_src != 0) {
+            snprintf(out, n, "%s  %u-bit  %u.%u kHz  %s", st->format, st->bits_src, rate / 1000,
+                     (rate % 1000) / 100, ch);
+        } else {
+            snprintf(out, n, "%s  %u.%u kHz  %s", st->format, rate / 1000, (rate % 1000) / 100, ch);
+        }
     }
 }
 
@@ -148,6 +157,9 @@ static void draw_info_lines(const PlayerStatus *st)
 {
     char fmt[96];
     const char *artist = st->has_file ? st->artist : "Choose File > Open to begin";
+
+    if (st->has_file && st->may_stutter)
+        artist = "May not play in real time";
 
     build_format(st, fmt, sizeof fmt);
     if (!C.valid || strcmp(artist, C.artist) != 0) {

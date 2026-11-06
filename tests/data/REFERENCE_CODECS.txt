@@ -1,0 +1,10 @@
+# Referencia del PC para codecbench. Generado por tools/host-codec-ref.sh
+# primeros 12 s de cada archivo; pcm_crc = CRC-32 del PCM en big-endian por muestra
+# codec,file,frames,channels,rate,pcm_crc
+codec,test128.mp3,529200,2,44100,AAECF8F6
+codec,test192.mp3,529200,2,44100,2398BAAC
+codec,testmono.mp3,529200,1,44100,5C79D5A0
+codec,testflac.flac,529200,2,44100,8D9595A7
+codec,testflacmono.flac,529200,1,44100,9408DFA8
+codec,testflac24.flac,529200,2,44100,8D9595A7
+codec,testflac8.flac,264600,2,22050,D7F37F58

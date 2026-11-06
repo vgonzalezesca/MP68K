@@ -32,6 +32,13 @@ Mac real.
 - El Toolbox que aún es 68k se llama a través de Mixed Mode: **un cambio de modo cuesta** (sin medir). No hacerlo en un
   bucle caliente.
 
+## Retornos de `struct` por valor
+**Verificado por un fallo real (ADR-005):** en PowerPC un `struct` se devuelve por un puntero oculto en `r3`. Si las Multiversal
+declaran el tipo como número (`NumVersion` es `LONGINT`), el llamador no pasa ese puntero y la función escribe sobre lo que `r3`
+tuviera: **corrupción silenciosa**, y el valor impreso puede incluso salir bien. En 68k no pasa. Se llama por una función propia
+en `targets/` (`sndver_get`) y `tools/check-numversion.sh` lo hace cumplir. Antes de usar una función que devuelva un tipo que en
+Apple sea `struct` (`NumVersion`, `Point`, `Rect`...), comparar su declaración con la de Apple.
+
 ## Ganchos de menú y arrastre
 `MenuHook` y `DragHook` son variables globales de bajo nivel que el sistema llama como código 68k, sin argumentos, y espera
 los registros intactos. `targets/hooks.c` instala un descriptor de Mixed Mode. **Sin verificar:** si Mixed Mode conserva todos

@@ -56,6 +56,7 @@ configure_file(src/common/build_info.h.in ${CMAKE_BINARY_DIR}/generated/build_in
 # --- Código común -------------------------------------------------------------
 add_library(mp368k_common STATIC
     targets/mactime.c
+    targets/sndver.c
     src/common/textlog.c
     src/common/mactime.c
     src/common/appfile.c

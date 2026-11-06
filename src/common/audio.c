@@ -6,6 +6,7 @@
 #include "memblock.h"
 #include "pcmconv.h"
 #include "ring.h"
+#include "sndver.h"
 
 #include <Memory.h>
 #include <Sound.h>
@@ -118,8 +119,6 @@ static unsigned query_sample_sizes(SndChannelPtr chan)
 OSErr audio_open(unsigned rate, unsigned channels, unsigned want_bits, unsigned ring_ms,
                  AudioInfo *info)
 {
-    NumVersion nv;
-    unsigned char v[4];
     unsigned long ring_bytes;
     long buf_bytes;
     OSErr err;
@@ -130,9 +129,7 @@ OSErr audio_open(unsigned rate, unsigned channels, unsigned want_bits, unsigned 
     if (channels < 1 || channels > 2 || rate < 8000 || rate > 48000)
         return paramErr;
 
-    nv = SndSoundManagerVersion();
-    memcpy(v, &nv, 4);
-    if (v[0] < 3)
+    if ((sndver_get() >> 24) < 3)
         return AUDIO_ERR_NO_DOUBLEBUFFER;
 
     {

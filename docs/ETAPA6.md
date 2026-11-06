@@ -7,6 +7,9 @@ los dos equipos desde el inicio y el asm optimiza el código ya definitivo. Nada
 
 - **Pedido:** versión PPC en C, sin ensamblador, pensada para el equipo con 601.
 - **Entregables:** las apps de `docs/SPECS_PPC.md` compiladas para PowerPC; `mp368k` en `dist/ppc` y en `dist/fat`.
+- **Ya sabido del primer `sysprobe` PPC** (`docs/HARDWARE_PPC601.md`): el entorno solo ofrecía 22 050 Hz, 16 bits, mono, así
+  que `audio_open` debe negociar **tasa y canales**, no solo profundidad, y mezclar o remuestrear si hace falta. Revisar
+  también los retornos de `struct` por valor (ADR-005).
 - **Salida:** los criterios de `docs/SPECS_PPC.md`.
 
 ## 6-G — Proyecto conjunto (rama `master`, luego se fusiona a ambas)

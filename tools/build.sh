@@ -33,6 +33,9 @@ cmake --build "$BUILD" -j"$(nproc)"
 for app in "${APPS[@]}"; do
     target_check_app "$BUILD" "$app"
 
+    echo "== $app"
+    python3 -I "$ROOT/tools/macbin_info.py" "$BUILD/$app.bin" --warn-code-kb 32
+
     out=$ROOT/dist/$TARGET/$app
     rm -rf "$out"
     mkdir -p "$out"

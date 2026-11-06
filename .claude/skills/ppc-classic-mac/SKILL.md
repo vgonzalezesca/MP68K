@@ -20,7 +20,8 @@ Mac real.
 - **No hay segmentos ni jump table:** la regla de 32 KB no aplica aquí.
 - **No hay A5:** las globales se resuelven por TOC. Código entre fragmentos pasa por vectores de transición.
 - Las bibliotecas del sistema se enlazan contra stubs en `multiversal/libppc` (verificado: `libInterfaceLib.a`,
-  `libQuickTimeLib.a`, `libSoundLib.a`, `libDriverServicesLib.a`, `libMathLib.a` y otras).
+  `libQuickTimeLib.a`, `libSoundLib.a`, `libDriverServicesLib.a`, `libMathLib.a` y otras). `SndGetInfo` está en SoundLib,
+  no en InterfaceLib (verificado): `targets/target.cmake` la enlaza, y debe existir en el equipo o la app no arranca.
 
 ## UPP y Mixed Mode
 - Un puntero a función C en PPC **no** es lo que espera el sistema: hay que pasarlo por `New...UPP`, que crea un descriptor

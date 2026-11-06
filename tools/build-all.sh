@@ -56,6 +56,7 @@ for app in $(apps_of 68k); do
             --copy "$B68/$app.code.bin" --data "$BPPC/$app.pef" \
             -o "$app.bin" --cc "$app.dsk" --cc "$app.APPL" --cc "%$app.ad" \
             -t APPL -c "$CREATOR" "${rsrc[@]}"
+        rm -f "$app.ad"     # copia que Rez deja junto a %app.ad; no es un artefacto
     )
     echo "== $app -> dist/fat/$app/"
     ls -la "$out"

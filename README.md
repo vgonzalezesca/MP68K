@@ -41,7 +41,7 @@ These describe the MP3 player on the `68k` branch.
 Host requirements (Linux): `cmake gmp mpfr libmpc boost bison flex texinfo ruby`, plus `sox lame ffmpeg python3 numpy` for the tests.
 
 ```sh
-tools/build-toolchain.sh    # builds Retro68 (68k and classic PowerPC), takes about an hour
+tools/build-toolchain.sh    # builds Retro68 (68k and classic PowerPC); 11 min on 12 threads
 git switch 68k              # or ppc; master does not build Mac applications
 tools/build.sh              # builds this branch and runs its checks
 tools/build-all.sh          # the three builds, from the committed 68k and ppc branches

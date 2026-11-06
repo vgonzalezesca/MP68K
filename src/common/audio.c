@@ -119,6 +119,7 @@ static unsigned query_sample_sizes(SndChannelPtr chan)
 OSErr audio_open(unsigned rate, unsigned channels, unsigned want_bits, unsigned ring_ms,
                  AudioInfo *info)
 {
+    uint32_t sm_version;
     unsigned long ring_bytes;
     long buf_bytes;
     OSErr err;
@@ -129,7 +130,8 @@ OSErr audio_open(unsigned rate, unsigned channels, unsigned want_bits, unsigned 
     if (channels < 1 || channels > 2 || rate < 8000 || rate > 48000)
         return paramErr;
 
-    if ((sndver_get() >> 24) < 3)
+    sm_version = sndver_get();
+    if ((sm_version >> 24) < 3)
         return AUDIO_ERR_NO_DOUBLEBUFFER;
 
     {
@@ -142,8 +144,8 @@ OSErr audio_open(unsigned rate, unsigned channels, unsigned want_bits, unsigned 
     if (err != noErr)
         return err;
 
-    info->sm_major = v[0];
-    info->sm_minor = v[1] >> 4;
+    info->sm_major = (unsigned)(sm_version >> 24);
+    info->sm_minor = (unsigned)((sm_version >> 20) & 0xF);
     info->hw_sizes = query_sample_sizes(gChan);
     if (want_bits == 8 || want_bits == 16)
         gBits = want_bits;

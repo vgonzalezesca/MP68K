@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Arma dist/visita1/: todo lo que hay que llevar al LC 580 en una sola visita.
 #
-#   sysprobe/  microbench/  decbench/  decprofile/  audiotest/  mp368k/   aplicaciones (.bin y .dsk)
+#   sysprobe/  microbench/  decbench/  decprofile/  audiotest/  mp368k/  segtest/   aplicaciones (.bin y .dsk)
 #   mp3/                                test128.mp3 test192.mp3 testmono.mp3 + REFERENCE.txt
 #
 # decbench, decprofile y audiotest buscan los MP3 y REFERENCE.txt en la MISMA carpeta que la aplicación.
@@ -13,7 +13,7 @@ OUT=$ROOT/dist/visita1
 rm -rf "$OUT"
 mkdir -p "$OUT/mp3"
 
-for app in sysprobe microbench decbench decprofile audiotest mp368k; do
+for app in sysprobe microbench decbench decprofile audiotest mp368k segtest; do
     for f in "$ROOT/dist/68k/$app/$app.bin" "$ROOT/dist/68k/$app/$app.dsk"; do
         [[ -f $f ]] || { echo "falta $f: ejecute tools/build.sh" >&2; exit 1; }
     done

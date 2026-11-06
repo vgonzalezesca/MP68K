@@ -2,8 +2,9 @@
 TARGET=68k
 TRIPLE=m68k-apple-macos
 TOOLCHAIN_NAME=retro68.toolchain.cmake
-APPS=(sysprobe microbench decbench decprofile audiotest mp368k)
+APPS=(sysprobe microbench decbench decprofile audiotest mp368k segtest)
 
 target_check_app() {
     "$ROOT/targets/check-nofpu.sh" "$1" "$2"
+    "$ROOT/targets/check-nosoftfloat.sh" "$1"
 }

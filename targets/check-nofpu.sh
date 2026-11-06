@@ -25,7 +25,9 @@ fi
 # etiqueta __EH_FRAME_BEGIN__*; objdump la desensambla como si fueran
 # instrucciones y produce falsos positivos (p. ej. "fmovew"). Se ignora solo ese
 # bloque (hasta la siguiente etiqueta) y se informa cuántas líneas se saltaron.
-out=$("$OBJDUMP" -d "$elf" | awk -F'\t' '
+# -m m68k:68040: sin él objdump no decodifica "mulsl #imm,%d0" (aparece con constantes de 32 bits),
+# se desfasa y convierte constantes en "instrucciones F" falsas, o esconde las verdaderas.
+out=$("$OBJDUMP" -m m68k:68040 -d "$elf" | awk -F'\t' '
     /^[0-9a-f]+ <.*>:$/ { skip = ($0 ~ /<__EH_FRAME_BEGIN__/); next }
     skip { skipped++; next }
     NF >= 3 && $3 ~ /^f[a-z]/ { print }

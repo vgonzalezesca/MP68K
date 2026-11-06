@@ -9,13 +9,14 @@ set -euo pipefail
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 B=$ROOT/build-host
-MAD=$ROOT/third_party/libmad
+MAD=$B/libmad_eq               # copia parcheada con el gancho del ecualizador (ADR-011)
 mkdir -p "$B/cod"
 
 "$ROOT/tools/prepare-dr-flac.sh" "$B/drflac" >/dev/null
+"$ROOT/tools/prepare-libmad-eq.sh" "$MAD"
 
 LIB=(bit fixed frame huffman layer12 layer3 stream synth timer version)
-OURS=(src/decoder_core.c src/arena.c src/codec.c src/codec_mp3.c src/codec_flac.c src/vorbiscomment.c
+OURS=(src/decoder_core.c src/eq.c src/arena.c src/codec.c src/codec_mp3.c src/codec_flac.c src/vorbiscomment.c
       src/id3.c src/mp3info.c tests/host/test_codecs.c)
 
 build() {
@@ -32,11 +33,14 @@ build() {
     gcc "${common[@]}" -w -c "$ROOT/src/dr_flac_impl.c" -o "$d/dr_flac_impl.o"; objs+=("$d/dr_flac_impl.o")
     for f in "${OURS[@]}"; do
         local o=$d/$(basename "$f" .c).o
-        gcc "${common[@]}" -Wall -Wextra -Wno-unused-parameter -Wno-multichar -c "$ROOT/$f" -o "$o"; objs+=("$o")
+        gcc "${common[@]}" -DMP368K_EQ_STATS -Wall -Wextra -Wno-unused-parameter -Wno-multichar -c "$ROOT/$f" -o "$o"; objs+=("$o")
     done
     gcc $flag "${objs[@]}" -o "$B/test_codecs$bits"
+    # Prueba unitaria del ecualizador (no necesita libmad: define un gancho ficticio).
+    gcc "${common[@]}" -DMP368K_EQ_STATS -Wall -Wextra -Wno-unused-parameter "$ROOT/src/eq.c" "$ROOT/tests/host/test_eq.c" \
+        -lm -o "$B/test_eq$bits"
 }
 
 build 64 8 -m64
 build 32 4 -m32
-echo "host-build-codecs: build-host/test_codecs64 y test_codecs32"
+echo "host-build-codecs: build-host/test_codecs{64,32} y test_eq{64,32}"

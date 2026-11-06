@@ -61,5 +61,21 @@ ffmpeg -v error -y -i "$OUT/mix.wav" -c:a wmav1 -b:a 128k "$OUT/testwma1.wma"
 cp "$OUT/mix.wav" "$OUT/test.wav"
 ffmpeg -v error -y -i "$OUT/mix.wav" -c:a pcm_s16be "$OUT/test.aif"
 
+# Archivos del ecualizador (fase 3): ruido blanco para medir la respuesta por banda, y transitorios
+# para que el codificador use bloques cortos.
+#   testnoise44/48/32.mp3  ruido blanco estereo a 44,1 / 48 / 32 kHz, 256 kbps
+#   testnoisemono.mp3      ruido blanco mono a 44,1 kHz
+#   testtransient.mp3      rafagas de ruido de 10 ms cada 200 ms (ataques que fuerzan bloques cortos)
+for pair in 44100:testnoise44 48000:testnoise48 32000:testnoise32; do
+    rate=${pair%%:*}; name=${pair##*:}
+    sox -R -n -r "$rate" -c 2 -b 16 "$tmp/$name.wav" synth 20 whitenoise vol 0.25
+    lame --quiet --cbr -b 256 -m j "$tmp/$name.wav" "$OUT/$name.mp3"
+done
+sox -R -n -r 44100 -c 1 -b 16 "$tmp/nm.wav" synth 20 whitenoise vol 0.25
+lame --quiet --cbr -b 128 -m m "$tmp/nm.wav" "$OUT/testnoisemono.mp3"
+sox -R -n -r 44100 -c 2 -b 16 "$tmp/burst.wav" synth 0.010 whitenoise vol 0.8 pad 0 0.190
+sox "$tmp/burst.wav" "$tmp/clicks.wav" repeat 99
+lame --quiet --cbr -b 192 -m j "$tmp/clicks.wav" "$OUT/testtransient.mp3"
+
 ls -l "$OUT"/*.mp3 "$OUT"/*.flac "$OUT"/*.ogg "$OUT"/*.wma "$OUT"/test.wav "$OUT"/test.aif
 sha256sum "$OUT"/*.mp3 "$OUT"/*.flac "$OUT"/*.ogg "$OUT"/*.wma "$OUT"/test.wav "$OUT"/test.aif

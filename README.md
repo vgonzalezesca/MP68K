@@ -14,7 +14,7 @@ An audio player for classic Mac OS. It started as an MP3 player for a **Macintos
 
 Three builds come out of them: **68k**, **PowerPC** and **FAT** (one file with both). The FAT currently contains `sysprobe` only, and has not been run on either side yet.
 
-**Planned, not implemented** ([`docs/ETAPA6.md`](docs/ETAPA6.md)): the PowerPC port, FLAC, Ogg Vorbis and WMA decoding, other formats through QuickTime, a 10-band equalizer, an icon, and assembly kernels on the `68k` branch. Whether Ogg and WMA can reach real time on a 33 MHz 68LC040 is unknown.
+**Done on the `68k` branch** ([`docs/ETAPA6.md`](docs/ETAPA6.md)): FLAC (checked in an emulator against the PC, bit for bit), a 10-band equalizer for MP3 (tested on the PC, not yet heard on a Mac) and a hand-drawn Platinum icon. **Planned, not implemented:** the PowerPC port, Ogg Vorbis and WMA, other formats through QuickTime, and assembly kernels. Whether Ogg and WMA can reach real time on a 33 MHz 68LC040 is unknown.
 
 ## Features
 

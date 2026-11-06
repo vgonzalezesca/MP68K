@@ -46,15 +46,15 @@ ffmpeg -v error -y -i "$OUT/testinfo.mp3" -c copy -map_metadata -1 -id3v2_versio
 #   testwma2.wma       WMA v2 128 kbps           testwma1.wma     WMA v1 128 kbps
 #   test.wav, test.aif PCM 16 bits (QuickTime o lectores propios)
 # Los .snd de Mac son recursos, no archivos de audio estandar: ffmpeg no los escribe.
-sox "$OUT/mix.wav" -b 24 "$tmp/mix24.wav"
-sox "$OUT/mix.wav" -b 8 -r 22050 "$tmp/mix8.wav" dither -s
-sox "$OUT/mix.wav" -c 1 "$tmp/mixmono.wav"
+sox -R "$OUT/mix.wav" -b 24 "$tmp/mix24.wav"
+sox -R "$OUT/mix.wav" -b 8 -r 22050 "$tmp/mix8.wav" dither -s
+sox -R "$OUT/mix.wav" -c 1 "$tmp/mixmono.wav"
 flac -s -f -5 --tag="TITLE=$TITLE" --tag="ARTIST=$ARTIST" --tag="ALBUM=$ALBUM" "$OUT/mix.wav" -o "$OUT/testflac.flac"
 flac -s -f -5 "$tmp/mix24.wav" -o "$OUT/testflac24.flac"
 flac -s -f -5 "$tmp/mixmono.wav" -o "$OUT/testflacmono.flac"
 flac -s -f -5 "$tmp/mix8.wav" -o "$OUT/testflac8.flac"
-oggenc -Q -q 4 -t "$TITLE" -a "$ARTIST" -l "$ALBUM" "$OUT/mix.wav" -o "$OUT/testvorbis.ogg"
-oggenc -Q -q 4 "$tmp/mixmono.wav" -o "$OUT/testvorbismono.ogg"
+oggenc -Q -s 368 -q 4 -t "$TITLE" -a "$ARTIST" -l "$ALBUM" "$OUT/mix.wav" -o "$OUT/testvorbis.ogg"
+oggenc -Q -s 368 -q 4 "$tmp/mixmono.wav" -o "$OUT/testvorbismono.ogg"
 ffmpeg -v error -y -i "$OUT/mix.wav" -c:a wmav2 -b:a 128k -metadata title="$TITLE" -metadata artist="$ARTIST" \
     -metadata album="$ALBUM" "$OUT/testwma2.wma"
 ffmpeg -v error -y -i "$OUT/mix.wav" -c:a wmav1 -b:a 128k "$OUT/testwma1.wma"
@@ -74,7 +74,7 @@ done
 sox -R -n -r 44100 -c 1 -b 16 "$tmp/nm.wav" synth 20 whitenoise vol 0.25
 lame --quiet --cbr -b 128 -m m "$tmp/nm.wav" "$OUT/testnoisemono.mp3"
 sox -R -n -r 44100 -c 2 -b 16 "$tmp/burst.wav" synth 0.010 whitenoise vol 0.8 pad 0 0.190
-sox "$tmp/burst.wav" "$tmp/clicks.wav" repeat 99
+sox -R "$tmp/burst.wav" "$tmp/clicks.wav" repeat 99
 lame --quiet --cbr -b 192 -m j "$tmp/clicks.wav" "$OUT/testtransient.mp3"
 
 ls -l "$OUT"/*.mp3 "$OUT"/*.flac "$OUT"/*.ogg "$OUT"/*.wma "$OUT"/test.wav "$OUT"/test.aif

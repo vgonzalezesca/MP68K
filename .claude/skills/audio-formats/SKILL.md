@@ -5,7 +5,7 @@ description: Decodificación de FLAC, Ogg Vorbis y WMA, reproducción por QuickT
 
 # Formatos y ecualizador (etapa 6-G)
 
-**Hecho (compilado y probado en el PC, sin ver en un Mac): la capa de códecs y FLAC. Pendiente: Vorbis, WMA, QuickTime y el ecualizador.** Las decisiones están en ADR-009, ADR-010 y ADR-011, y el pedido en `docs/ETAPA6.md`. Lo que
+**Hecho: la capa de códecs y FLAC (validados en el emulador con `codecbench`) y el ecualizador del MP3 (compilado y probado en el PC). Pendiente: Vorbis, WMA y QuickTime.** Las decisiones están en ADR-009, ADR-010 y ADR-011, y el pedido en `docs/ETAPA6.md`. Lo que
 se dice de cada biblioteca hay que **confirmarlo leyendo su código y su licencia** antes de traerla a `third_party/`.
 
 ## Reglas al traer una biblioteca
@@ -47,21 +47,26 @@ extensión ni por el tipo de archivo: los archivos traídos de un PC no suelen t
 - `MoviesTask` se llama desde el bucle principal. Abre su propio canal: cerrar el nuestro mientras se usa.
 - Comprobar con Gestalt que QuickTime esté y avisar si falta.
 
-## Ecualizador (ADR-011)
-Bandas: 70, 180, 320, 600, 1k, 3k, 6k, 12k, 14k y 16k Hz, más preamp y On. Sin fuente primaria de Winamp para las tres primeras.
+## Ecualizador (ADR-011) — hecho para MP3
+Bandas: 70, 180, 320, 600, 1k, 3k, 6k, 12k, 14k y 16k Hz, más preamp y On (por confirmar contra un Winamp real).
 
 | Formato | 68k | PPC | Cómo |
 |---|---|---|---|
-| MP3 | sí | sí | ganancia por línea de frecuencia, antes de la IMDCT, con un parche sobre una copia de libmad |
-| Vorbis, WMA | sí | sí | ganancia sobre los coeficientes, antes de la IMDCT |
+| MP3 | **hecho** | sí | gancho `mp368k_eq_hook` en una copia parcheada de libmad, antes de la alias-reduction/IMDCT |
+| Vorbis, WMA | pendiente | pendiente | ganancia sobre los coeficientes, antes de la IMDCT, con la misma tabla |
 | FLAC | no | sí | filtros muestra a muestra en `targets/eq_iir.c`, solo PPC |
 | QuickTime | no | no | el audio no pasa por la app; controles desactivados |
 
+- **Código:** `src/eq.{h,c}` (solo enteros, Q24, multiplicación saturada), `src/eq_tables.h` (generada por `tools/gen_eq_tables.py`),
+  `third_party/patches/libmad-0.15.1b-eq.patch` + `mp368k_eq.h`, `tools/prepare-libmad-eq.sh`. La copia parcheada se enlaza como `mad_eq` y
+  `decoder_core_eq` y la usa `codecs`; `decbench`, `decprofile` y `audiotest` siguen con la libmad original.
+- **Mapeo de frecuencias:** línea larga `i` ↔ `(i+0,5)·(fs/2)/576`. Tras `III_reorder`, un bloque corto queda `18·sb + 6·w + k` y su frecuencia
+  `f = 6·sb + k` equivale a la línea larga `3f+1`. En un bloque mixto, los primeros 36 coeficientes son largos. Posición de los centros en
+  **1/64 de línea**: con 1/16 la pendiente entre bandas de graves (~8 dB por línea) daba 0,5 dB de error.
+- **Latencia:** el anillo de 4 s retrasaría los cambios; con la ventana abierta el motor deja ~600 ms por delante (`player_set_fill_target_ms`).
+- **Pruebas:** `test_eq` (modelo independiente, saturación, cambio de tasa) y `check_eq.py` (respuesta sobre ruido blanco a 44,1/48/32 kHz y mono,
+  bloques cortos con `testtransient.mp3`, 32 == 64 bits, y EQ plano == referencia). Con el gancho en NULL el PCM es idéntico bit a bit.
 - Por qué no filtros en 68k: costarían ≈ 267 % de la CPU a 44,1 kHz estéreo (`docs/SPECS_68K.md`, aritmética, sin medir).
-- La frecuencia de cada línea depende de la tasa y del tamaño de bloque: recalcular la tabla al cambiar cualquiera de ellos,
-  **fuera** del camino caliente y sin `float`. Interpolar entre bandas para no crear escalones.
-- **Prueba clave:** con el EQ en plano, el PCM debe ser idéntico bit a bit a la referencia. Con una banda activa, comparar la
-  respuesta en frecuencia en el PC con barridos de tono.
 
 ## Archivos de prueba
 `ffmpeg` del host codifica FLAC, Vorbis, WMAv1 y WMAv2; `flac` y `oggenc` también están instalados. Ampliar `tools/make_testfiles.sh`.

@@ -58,7 +58,7 @@ los dos equipos desde el inicio y el asm optimiza el código ya definitivo. Nada
 | 0 — Cimientos: archivos de prueba, `segtest`, chequeo de float por software, tamaños de segmento | hecha; `segtest` corrió en Infinite Mac: OK |
 | 1 — Logo e ícono, ventana About | rediseñada (Platinum con contorno, dibujada a mano, con `icl4`/`ics4`); compilada; **falta que Víctor apruebe la hoja de contacto y la vea en el Finder** |
 | 2 — Capa de códecs y FLAC | hecha; **`codecbench` en Infinite Mac: los 7 CRC coinciden con el PC**; falta oír un FLAC en `mp368k` |
-| 3 — Ecualizador del MP3 | pendiente |
+| 3 — Ecualizador del MP3 | DSP y ventana hechos; pruebas de PC OK (32 y 64 bits); **falta verlo y oírlo en Infinite Mac** |
 | 4 — Ogg Vorbis | pendiente |
 | 5 — WMA | pendiente |
 | 6 — QuickTime (con app de prueba previa) | pendiente |

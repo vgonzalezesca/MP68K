@@ -23,6 +23,7 @@
 #include "appfile.h"
 #include "build_info.h"
 #include "codec.h"
+#include "eq.h"
 #include "fileread.h"
 #include "macenv.h"
 #include "mactime.h"
@@ -47,7 +48,7 @@ static const char *const kFiles[] = {
 #define NFILES (sizeof kFiles / sizeof kFiles[0])
 
 typedef struct {
-    char file[24];
+    char file[28];
     char codec[8];
     unsigned long frames;
     unsigned channels, rate;
@@ -56,7 +57,7 @@ typedef struct {
     int has_ref, match;
 } Row;
 
-static Row gRows[NFILES];
+static Row gRows[NFILES + 1];
 static int gRowCount;
 static FileBlob gRef;
 static int gRefLoaded;
@@ -193,7 +194,11 @@ static unsigned long decode_run(const Codec *c, CodecIO *io, uint8_t *buf, const
     return frames;
 }
 
-static void bench_file(const char *name, uint8_t *buf)
+/* Ajuste de ecualizador de la fila "+EQ": todas las líneas tienen ganancia, el peor caso de costo.
+ * Debe coincidir con MP368K_EQ de tools/host-codec-ref.sh. */
+static const int8_t kBenchEq[EQ_BANDS + 1] = { 12, -6, 4, 0, 10, -12, 8, 0, -4, 12, 0 };
+
+static void bench_file(const char *name, uint8_t *buf, int with_eq)
 {
     FileReader fr;
     CodecIO io;
@@ -205,6 +210,7 @@ static void bench_file(const char *name, uint8_t *buf)
     unsigned channels = 0, rate = 0;
     Row *row = &gRows[gRowCount];
     OSErr oe;
+    char label[24];
 
     oe = fileread_open_app_file(&fr, name);
     if (oe != noErr) {
@@ -221,13 +227,24 @@ static void bench_file(const char *name, uint8_t *buf)
         fileread_close(&fr);
         return;
     }
+    snprintf(label, sizeof label, "%s%s", name, with_eq ? "+EQ" : "");
+    if (with_eq) {
+        EqSettings es;
+        int k;
+
+        es.enabled = 1;
+        for (k = 0; k < EQ_BANDS; k++)
+            es.band[k] = kBenchEq[k];
+        es.preamp = kBenchEq[EQ_BANDS];
+        eq_set(&es);
+    }
     limit = (unsigned long)ci.rate * DECODE_SECONDS;
     if (ci.duration_ms && (unsigned long long)ci.duration_ms * ci.rate / 1000ULL < limit)
         limit = (unsigned long)((unsigned long long)ci.duration_ms * ci.rate / 1000ULL);
 
     textlog_printf("\ntest: decode\nfile: %s %s %u kbps %u canales %u Hz %u bits\nprofile: FULL\n"
                    "run,usec_total,frames\n",
-                   name, ci.format, ci.bitrate / 1000, ci.channels, ci.rate, ci.bits_src);
+                   label, ci.format, ci.bitrate / 1000, ci.channels, ci.rate, ci.bits_src);
 
     for (r = 0; r < runs; r++) {
         uint64_t t0 = mactime_usec();
@@ -243,7 +260,7 @@ static void bench_file(const char *name, uint8_t *buf)
 
     /* Pasada de verificación, fuera de la medición. */
     frames = decode_run(c, &io, buf, &ci, limit, &crc, &channels, &rate);
-    row->has_ref = ref_find(name, frames, &ref);
+    row->has_ref = ref_find(label, frames, &ref);
     row->match = row->has_ref && ref == crc;
     if (row->has_ref)
         textlog_printf("pcm_crc32: %08lX referencia_pc=%08lX -> %s\n", crc, ref, row->match ? "COINCIDE" : "DIFIERE");
@@ -254,7 +271,7 @@ static void bench_file(const char *name, uint8_t *buf)
     memcpy(sorted, us + 1, (size_t)n * sizeof sorted[0]);
     sort_u64(sorted, n);
 
-    snprintf(row->file, sizeof row->file, "%s", name);
+    snprintf(row->file, sizeof row->file, "%s", label);
     snprintf(row->codec, sizeof row->codec, "%s", ci.format);
     row->frames = frames;
     row->channels = channels;
@@ -266,6 +283,13 @@ static void bench_file(const char *name, uint8_t *buf)
     row->ref_crc = ref;
     gRowCount++;
     fileread_close(&fr);
+    if (with_eq) {
+        EqSettings off;
+
+        eq_flat(&off);
+        off.enabled = 0;
+        eq_set(&off);
+    }
     textlog_save_next_to_app(OUT_NAME);
 }
 
@@ -349,7 +373,8 @@ int main(void)
     textlog_printf("reference: %s\n", gRefLoaded ? REF_NAME " cargado" : "sin " REF_NAME " (no se compara con el PC)");
 
     for (i = 0; i < NFILES; i++)
-        bench_file(kFiles[i], (uint8_t *)buf.data);
+        bench_file(kFiles[i], (uint8_t *)buf.data, 0);
+    bench_file("test128.mp3", (uint8_t *)buf.data, 1);        /* MP3 con el ecualizador activo (costo del EQ) */
 
     print_summary();
     textlog_printf("arena_peak_bytes: %lu\n", (unsigned long)codec_arena()->peak);

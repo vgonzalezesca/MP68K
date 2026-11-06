@@ -150,6 +150,10 @@ el MPW 3.5 GM y se recompila Retro68 con `--universal`.
   `tools/prepare-libmad-prof.sh`); el árbol `third_party/libmad/` sigue sin modificaciones.
   Las marcas son no-ops sin reloj y no alteran el audio (CRC idéntico, verificado en el PC).
 
+- **Dato nuevo (2026-11-06):** `sysprobe` y `mp368k` ya corren en Infinite Mac con segmentos de 63 y 70 KB, así que el límite
+  de 32 KB no se aplica de forma visible en ese sistema. Sigue sin probarse en el LC 580. `tools/build.sh` ahora imprime los
+  tamaños de cada segmento y `segtest` (rama `68k`) ejecuta código repartido en un segmento de 226 KB. **Falta correrlo.**
+
 **Revisar si** la etapa 4 compara `OPT_SPEED`/`OPT_SSO` o `ASO_ZEROCHECK` (cambian el PCM:
 tendrían su propio CRC de referencia) o si el RTF baseline obliga a un `HALF` propio.
 
@@ -246,6 +250,19 @@ una sola llamada a `Rez`. Solo entran las apps que existan en las dos ramas.
 
 **Consecuencias.** La FAT no ve cambios sin confirmar. Se comprueba la estructura del archivo; **que arranque en cada lado
 solo lo prueba Víctor**, primero con `sysprobe`.
+
+## ADR-013 — Logo e ícono con la paleta de 256 colores del sistema
+
+**Contexto.** Víctor pidió un logo parecido a una imagen suya, optimizado a la paleta de 256 colores de Mac OS 8.
+
+**Decisión.** `tools/make_logo.py` redibuja el motivo a cada tamaño y lo cuantiza a la paleta estándar de 8 bits (clut 8), en
+vez de reducir la imagen. Los recursos van en `src/player/icons.r` (generado y versionado). El About dibuja `LOGO` con la
+tabla de colores del sistema, no con un `PICT`. `tools/set_bundle_bit.py` activa el bit de bundle porque Retro68 no lo hace.
+
+**Consecuencias.** El orden de índices de la paleta es un **supuesto sin verificar** (documentado en el script y en `docs/UI.md`).
+El resultado depende del juicio de Víctor sobre el diseño a 32×32.
+
+**Revisar si** los colores salen mal en el Finder o el ícono no aparece.
 
 ## Plantilla para nuevas decisiones
 

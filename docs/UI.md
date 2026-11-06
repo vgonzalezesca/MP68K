@@ -106,18 +106,26 @@ Options (Audio Output: Automatic / 8-bit / 16-bit, Show Technical Info) · Windo
 - Con Show Technical Info la línea técnica agrega `mem NNK` (pico del arena de los códecs).
 - Límites con mensaje claro: más de 2 canales o una tasa fuera de 8–48 kHz ("…only play audio with 1 or 2 channels…").
 
-## Logo e ícono (6-G, fase 1: compilado, sin ver en pantalla)
+## Logo e ícono (6-G, fase 1/1b: compilado, sin ver en el Finder)
 
-- **Origen:** la imagen de referencia de Víctor (`assets/logo/reference.png`): anillos concéntricos verde azulado sobre una
-  forma redondeada, con una ola y un trazo oscuro. `tools/make_logo.py` la **redibuja** (no la reduce) a 16, 32 y 96 px, porque
-  los anillos finos no sobreviven a una reducción, y cuantiza a la paleta estándar de 8 bits de Mac OS. Las zonas planas usan
-  colores exactos de la paleta; el degradado de 96 px usa difuminado ordenado (Bayer 4x4).
-- **Recursos** (`src/player/icons.r`, generado; `player.r` trae `BNDL`, `FREF`, la firma `M368` y `vers`): `icl8` y `ics8`
-  (color), `ICN#` y `ics#` (1 bit con máscara, para pantallas de 1 o 4 bits) y `LOGO` (96×96 de 8 bits).
+- **Dirección (elegida por Víctor): Platinum con contorno.** Esfera con anillos concéntricos verde azulado, colina clara y un trazo
+  oscuro, a partir de su imagen (`assets/logo/reference.png`). Contorno de 1 px, luz desde arriba a la izquierda, sombra proyectada de
+  1 px abajo a la derecha, sin difuminado a 16 y 32 px.
+- **16 y 32 px se dibujan a mano, píxel por píxel**, en `assets/logo/icon32.txt` e `icon16.txt`: una letra por color, todos **exactos de
+  la paleta del sistema** (7 colores a 32 px y 7 a 16 px); se editan como texto. 32 px: 3 anillos de punto medio (arcos continuos) y
+  el trazo oscuro; 16 px: un anillo con punto central y la colina, sin el trazo (no cabe).
+- `tools/make_logo.py` los convierte y genera **`icl8`/`ics8`** (256 colores), **`icl4`/`ics4`** (16 colores: letra → color del sistema, ver
+  `FOUR_BIT`), **`ICN#`/`ics#`** (1 bit con máscara; la sombra proyectada entra en la máscara) y **`LOGO`** (96×96, dibujo por procedimiento
+  con degradado difuminado en orden y el mismo contorno y reflejo). `assets/logo/contact_sheet.png` es la hoja de contacto: 10× y 1×,
+  sobre gris Platinum, blanco, patrón de escritorio y seleccionado (aproximado), y los de 4 y 1 bit.
+- **Mac OS 8.0/8.1 no usa íconos de 48×48** (eso llegó con 8.5), así que no se generan.
+- **Recursos** (`src/player/icons.r`, generado; `player.r` trae `BNDL`, `FREF`, la firma `M368` y `vers`).
 - **About:** ventana propia (`ui_about.c`), no un diálogo modal: el audio sigue sonando. Dibuja `LOGO` con la tabla de colores
   estándar del sistema (`GetCTable(8)`); el blanco puro es transparente. Se cierra con clic, Return, Enter, Esc o el cuadro de cierre.
-- **Supuesto sin verificar en un Mac:** el orden de índices de la paleta (cubo de 6 niveles sin el negro, 10 rojos, 10 verdes,
-  10 azules, 10 grises, negro al final). Si los colores del ícono o del About se ven mal, ese orden es el primer sospechoso.
+- **Supuestos sin verificar en un Mac:** el orden de índices de la paleta de 256 colores (cubo de 6 niveles sin el negro, 10 rojos, 10
+  verdes, 10 azules, 10 grises, negro al final) y el de la de 16 colores (blanco, amarillo, naranja, rojo, magenta, púrpura, azul, cian,
+  verde, verde oscuro, café, canela, gris claro, gris medio, gris oscuro, negro). Si los colores se ven mal en el Finder, ese orden es el
+  primer sospechoso.
 - **Bit "bundle":** el Finder solo muestra el ícono si el archivo lo tiene; Retro68 lo deja en cero, así que
   `tools/set_bundle_bit.py` lo activa en el `.bin` (con su CRC), el `.dsk`, `.finf` y el AppleDouble, y lee de vuelta cada parche.
   Si aun así no se ve, probar reconstruir el escritorio (mantener ⌘ y Opción al arrancar) o copiar la app a un volumen nuevo.

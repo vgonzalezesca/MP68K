@@ -23,6 +23,7 @@
 #include "platform.h"
 #include "player.h"
 #include "playlist.h"
+#include "ui_about.h"
 #include "ui_list.h"
 #include "ui_main.h"
 
@@ -37,7 +38,7 @@ enum {
     CTL_REPEAT_ALL, CTL_REPEAT_ONE
 };
 enum { OPT_OUT_AUTO = 1, OPT_OUT_8, OPT_OUT_16, OPT_TECH_INFO = 5 };
-enum { ALRT_ABOUT = 128, ALRT_MESSAGE = 129 };
+enum { ALRT_MESSAGE = 129 };
 
 #define EXTRA_STACK  (48L * 1024)
 #define MIN_STACK    (24L * 1024)
@@ -294,10 +295,8 @@ static void do_add(Boolean folder)
 
 static void do_about(void)
 {
-    Boolean was = pause_for_modal();
-
-    NoteAlert(ALRT_ABOUT, NULL);
-    resume_after_modal(was);
+    if (ui_about_show() != noErr)
+        show_error("Could not open the About window.", 0);
 }
 
 static void toggle_play_pause(void)
@@ -520,6 +519,11 @@ static void do_key(EventRecord *evt)
     char c = (char)(evt->message & charCodeMask);
     const PlayerStatus *st = player_status();
 
+    if (ui_about_window() != NULL && !(evt->modifiers & cmdKey) &&
+        (c == '\r' || c == 0x03 || c == 0x1B)) {           /* Return, Enter, Esc cierran About */
+        ui_about_close();
+        return;
+    }
     if (evt->modifiers & cmdKey) {
         long m;
 
@@ -563,7 +567,9 @@ static void do_mouse_down(EventRecord *evt)
         break;
     case inGoAway:
         if (TrackGoAway(win, evt->where)) {
-            if (win == ui_list_window()) {
+            if (win == ui_about_window()) {
+                ui_about_close();
+            } else if (win == ui_list_window()) {
                 ui_list_show(false);
                 sync_modes();
             } else {
@@ -583,6 +589,8 @@ static void do_mouse_down(EventRecord *evt)
                 ui_main_click(p);
             else if (win == ui_list_window())
                 ui_list_click(p, evt->when);
+            else if (win == ui_about_window())
+                ui_about_close();
         }
         break;
     default:
@@ -609,6 +617,8 @@ static void handle_event(EventRecord *evt)
             ui_main_draw_all();
         else if (w == ui_list_window())
             ui_list_draw_all();
+        else if (w == ui_about_window())
+            ui_about_draw();
         EndUpdate(w);
         break;
     }

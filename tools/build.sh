@@ -54,6 +54,7 @@ for app in "${APPS[@]}"; do
         fi
     done
     cd "$ROOT"
+    python3 -I "$ROOT/tools/set_bundle_bit.py" "$out" "$app"
     echo "== $app -> dist/$TARGET/$app/"
     ls -la "$out"
 done

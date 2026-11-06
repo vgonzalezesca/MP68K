@@ -180,10 +180,12 @@ if(mp368k IN_LIST MP368K_APPS)
         src/player/app.c
         src/player/ui_main.c
         src/player/ui_list.c
+        src/player/ui_about.c
         src/player/ui_draw.c
         src/player/playlist.c
         src/player/trackinfo.c
         src/player/player.r
+        src/player/icons.r
         CREATOR "M368")
     target_link_libraries(mp368k player_engine mp368k_hooks)
 endif()

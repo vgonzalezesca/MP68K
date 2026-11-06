@@ -21,3 +21,4 @@ bench_results*.txt
 tests/data/*
 !tests/data/REFERENCE.txt
 build-host/
+__pycache__/

@@ -51,6 +51,20 @@ los dos equipos desde el inicio y el asm optimiza el código ya definitivo. Nada
 - **Entregables y salida:** los de `docs/SPECS_68K.md`. **La velocidad queda `sin medir`** hasta correr en el LC 580.
 - **Depende de** la 6-G: el asm se escribe sobre los códecs ya elegidos.
 
+## Avance de la versión 68k (plan "Terminar la versión 68k")
+
+| Fase | Estado |
+|---|---|
+| 0 — Cimientos: archivos de prueba, `segtest`, chequeo de float por software, tamaños de segmento | hecha; **falta que Víctor corra `segtest`** |
+| 1 — Logo e ícono, ventana About | compilada; **falta que Víctor la vea y apruebe el diseño** |
+| 2 — Capa de códecs y FLAC | pendiente |
+| 3 — Ecualizador del MP3 | pendiente |
+| 4 — Ogg Vorbis | pendiente |
+| 5 — WMA | pendiente |
+| 6 — QuickTime (con app de prueba previa) | pendiente |
+| 7 — Asm 68040 | pendiente |
+| 8 — Cierre | pendiente |
+
 ## Lo que ya quedó listo (scaffolding)
 
 Ramas, `targets/`, `tools/build.sh`, `tools/build-all.sh`, toolchain con PowerPC y una FAT de prueba de `sysprobe`.

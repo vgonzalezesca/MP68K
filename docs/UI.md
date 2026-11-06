@@ -94,12 +94,25 @@ Options (Audio Output: Automatic / 8-bit / 16-bit, Show Technical Info) · Windo
   búsqueda lineal.
 - Hasta 512 entradas. Siguiente/Anterior, Shuffle y Repeat siguen `src/order.c` (probado en el PC).
 
+## Logo e ícono (6-G, fase 1: compilado, sin ver en pantalla)
+
+- **Origen:** la imagen de referencia de Víctor (`assets/logo/reference.png`): anillos concéntricos verde azulado sobre una
+  forma redondeada, con una ola y un trazo oscuro. `tools/make_logo.py` la **redibuja** (no la reduce) a 16, 32 y 96 px, porque
+  los anillos finos no sobreviven a una reducción, y cuantiza a la paleta estándar de 8 bits de Mac OS. Las zonas planas usan
+  colores exactos de la paleta; el degradado de 96 px usa difuminado ordenado (Bayer 4x4).
+- **Recursos** (`src/player/icons.r`, generado; `player.r` trae `BNDL`, `FREF`, la firma `M368` y `vers`): `icl8` y `ics8`
+  (color), `ICN#` y `ics#` (1 bit con máscara, para pantallas de 1 o 4 bits) y `LOGO` (96×96 de 8 bits).
+- **About:** ventana propia (`ui_about.c`), no un diálogo modal: el audio sigue sonando. Dibuja `LOGO` con la tabla de colores
+  estándar del sistema (`GetCTable(8)`); el blanco puro es transparente. Se cierra con clic, Return, Enter, Esc o el cuadro de cierre.
+- **Supuesto sin verificar en un Mac:** el orden de índices de la paleta (cubo de 6 niveles sin el negro, 10 rojos, 10 verdes,
+  10 azules, 10 grises, negro al final). Si los colores del ícono o del About se ven mal, ese orden es el primer sospechoso.
+- **Bit "bundle":** el Finder solo muestra el ícono si el archivo lo tiene; Retro68 lo deja en cero, así que
+  `tools/set_bundle_bit.py` lo activa en el `.bin` (con su CRC), el `.dsk`, `.finf` y el AppleDouble, y lee de vuelta cada parche.
+  Si aun así no se ve, probar reconstruir el escritorio (mantener ⌘ y Opción al arrancar) o copiar la app a un volumen nuevo.
+
 ## Pendiente de la 6-G (sin implementar)
 
 - **Ventana del ecualizador (en-US, Platinum):** casilla **On**, deslizador vertical **Preamp** y 10 deslizadores
   verticales rotulados `70 180 320 600 1K 3K 6K 12K 14K 16K`, en el mismo estilo de `ui_draw.c`. Sin presets. Se abre desde
   el menú Window. Cuando el formato o el equipo no lo permiten, los controles se desactivan y un texto explica por qué
   (ADR-011). Mantener la regla de la interfaz: redibujar solo lo que cambia.
-- **Logo:** ícono de la app (`icl8`, `ics8`, `ICN#`, `ics#`, con `BNDL` y `FREF` para el creador `M368`) y una versión
-  mayor en el cuadro About, en la paleta del sistema de 256 colores. Se basa en la imagen que aportó Víctor (anillos
-  concéntricos verde azulado sobre una forma redondeada).

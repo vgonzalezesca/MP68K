@@ -239,6 +239,7 @@ if(mp368k IN_LIST MP368K_APPS)
         src/player/ui_main.c
         src/player/ui_list.c
         src/player/ui_about.c
+        src/player/ui_eq.c
         src/player/ui_draw.c
         src/player/playlist.c
         src/player/trackinfo.c

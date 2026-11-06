@@ -70,6 +70,7 @@ resource 'MENU' (133) {
 	133, textMenuProc, allEnabled, enabled, "Window",
 	{
 		"Playlist", noIcon, "L", noMark, plain;
+		"Equalizer", noIcon, "E", noMark, plain;
 	}
 };
 

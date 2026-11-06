@@ -13,6 +13,7 @@
 #include <Files.h>
 
 #include "decoder_core.h"
+#include "eq.h"
 #include "trackinfo.h"
 
 typedef enum { PLAYER_STOPPED = 0, PLAYER_PLAYING, PLAYER_PAUSED } PlayerState;
@@ -78,6 +79,15 @@ void player_set_quality(PlayerQuality q);
 /* 0 = automático (16 bits si el hardware lo ofrece), 8 o 16. Si está sonando, reabre la salida en la posición actual. */
 void player_set_output_bits(unsigned bits);
 void player_set_volume(unsigned volume);    /* 0..100 */
+/* Ecualizador (solo actúa sobre MP3; PlayerStatus.eq_available lo dice). Se aplica a lo que se decodifique desde ahora. */
+void player_set_eq(const EqSettings *s);
+const EqSettings *player_get_eq(void);
+/*
+ * Cuánto audio decodificado se deja por delante, en ms; 0 = llenar todo el anillo (4 s, el colchón para menús y
+ * arrastres). Con la ventana del ecualizador abierta se baja a ~600 ms para que un cambio se oiga pronto; lo que ya
+ * esté en el anillo se oye antes (hasta ~3 s tras abrir la ventana).
+ */
+void player_set_fill_target_ms(unsigned ms);
 void player_set_balance(int balance);       /* -100 (izquierda) .. 100 (derecha) */
 
 void player_idle(void);

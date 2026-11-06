@@ -39,5 +39,27 @@ ffmpeg -v error -y -i "$OUT/testinfo.mp3" -c copy -map_metadata -1 -id3v2_versio
 ffmpeg -v error -y -i "$OUT/testinfo.mp3" -c copy -map_metadata -1 -id3v2_version 4 \
     -metadata title="$TITLE" -metadata artist="$ARTIST" -metadata album="$ALBUM" "$OUT/testtag24.mp3"
 
-ls -l "$OUT"/*.mp3
-sha256sum "$OUT"/*.mp3
+# Archivos de la etapa 6 (otros formatos). Mismas pistas que los MP3, con las mismas etiquetas.
+#   testflac.flac      16 bits estereo           testflac24.flac  24 bits (se reduce a 16 al reproducir)
+#   testflacmono.flac  16 bits mono              testflac8.flac   8 bits
+#   testvorbis.ogg     oggenc -q4 estereo        testvorbismono.ogg
+#   testwma2.wma       WMA v2 128 kbps           testwma1.wma     WMA v1 128 kbps
+#   test.wav, test.aif PCM 16 bits (QuickTime o lectores propios)
+# Los .snd de Mac son recursos, no archivos de audio estandar: ffmpeg no los escribe.
+sox "$OUT/mix.wav" -b 24 "$tmp/mix24.wav"
+sox "$OUT/mix.wav" -b 8 -r 22050 "$tmp/mix8.wav" dither -s
+sox "$OUT/mix.wav" -c 1 "$tmp/mixmono.wav"
+flac -s -f -5 --tag="TITLE=$TITLE" --tag="ARTIST=$ARTIST" --tag="ALBUM=$ALBUM" "$OUT/mix.wav" -o "$OUT/testflac.flac"
+flac -s -f -5 "$tmp/mix24.wav" -o "$OUT/testflac24.flac"
+flac -s -f -5 "$tmp/mixmono.wav" -o "$OUT/testflacmono.flac"
+flac -s -f -5 "$tmp/mix8.wav" -o "$OUT/testflac8.flac"
+oggenc -Q -q 4 -t "$TITLE" -a "$ARTIST" -l "$ALBUM" "$OUT/mix.wav" -o "$OUT/testvorbis.ogg"
+oggenc -Q -q 4 "$tmp/mixmono.wav" -o "$OUT/testvorbismono.ogg"
+ffmpeg -v error -y -i "$OUT/mix.wav" -c:a wmav2 -b:a 128k -metadata title="$TITLE" -metadata artist="$ARTIST" \
+    -metadata album="$ALBUM" "$OUT/testwma2.wma"
+ffmpeg -v error -y -i "$OUT/mix.wav" -c:a wmav1 -b:a 128k "$OUT/testwma1.wma"
+cp "$OUT/mix.wav" "$OUT/test.wav"
+ffmpeg -v error -y -i "$OUT/mix.wav" -c:a pcm_s16be "$OUT/test.aif"
+
+ls -l "$OUT"/*.mp3 "$OUT"/*.flac "$OUT"/*.ogg "$OUT"/*.wma "$OUT"/test.wav "$OUT"/test.aif
+sha256sum "$OUT"/*.mp3 "$OUT"/*.flac "$OUT"/*.ogg "$OUT"/*.wma "$OUT"/test.wav "$OUT"/test.aif

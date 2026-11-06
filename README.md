@@ -76,4 +76,6 @@ Personal-use project. Because it includes libmad, the resulting binary is **GPL*
 
 No Apple ROMs or system images are included.
 <img width="808" height="604" alt="image" src="https://github.com/user-attachments/assets/7e7d1c2c-079b-46f1-ace9-142621bbaa5b" />
+<img width="808" height="604" alt="image" src="https://github.com/user-attachments/assets/00421371-f20a-4624-a225-91c361f6fa19" />
+<img width="808" height="604" alt="image" src="https://github.com/user-attachments/assets/3b107ad0-62c8-447b-91e6-6acf69163160" />
 

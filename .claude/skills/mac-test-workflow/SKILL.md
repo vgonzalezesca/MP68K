@@ -1,9 +1,20 @@
 ---
 name: mac-test-workflow
-description: Flujo de pruebas de MP368K en Basilisk II (lógica y regresión) y en el LC 580 real (rendimiento), con protocolo de medición, formato del archivo de resultados y entrega a bench-analyst. Usar al preparar un binario de prueba, pedir mediciones a Víctor o interpretar resultados.
+description: Flujo de pruebas de MP368K en emuladores (lógica y regresión) y en los equipos reales, LC 580 y Mac con 601 (rendimiento), con protocolo de medición, formato del archivo de resultados y entrega a bench-analyst. Usar al preparar un binario de prueba, pedir mediciones a Víctor o interpretar resultados.
 ---
 
-# Pruebas: Basilisk II y LC 580
+# Pruebas: emuladores, LC 580 y Mac con 601
+
+## Qué compilación probar dónde
+| Compilación | Dónde | Comando |
+|---|---|---|
+| `dist/68k` | Infinite Mac o Basilisk II (68k), LC 580 | `tools/build.sh` en la rama `68k` |
+| `dist/ppc` | emulador PowerPC (por verificar cuál), Mac con 601 | `tools/build.sh` en la rama `ppc` |
+| `dist/fat` | **los dos**: es la única forma de probar que arranca en cada lado | `tools/build-all.sh` |
+
+Infinite Mac (`infinitemac.org`) es el emulador que usa Víctor en 68k (ROM Quadra 650, Mac OS 8.1). Falta verificar qué
+opciones PowerPC ofrece. Todo lo medido en un emulador es solo lógica: nunca va a `PERF_LOG.md` como dato de un equipo real.
+La primera línea de cada archivo de resultados indica la compilación (`build: 68k-<hash>...` o `build: ppc-<hash>...`).
 
 ## Reparto de responsabilidades
 - **Claude Code** compila, empaqueta, escribe el programa de prueba y analiza los
@@ -30,6 +41,12 @@ description: Flujo de pruebas de MP368K en Basilisk II (lógica y regresión) y 
 - Ejecutar cada prueba ≥ 5 veces; descartar la primera para el análisis (se reporta
   aparte).
 
+## Mac con 601 real (rendimiento)
+- Mismo protocolo que el LC 580. Primero `sysprobe`, para confirmar modelo, CPU nativa, sistema y sonido
+  (`docs/HARDWARE_PPC601.md`). `microbench` no aplica: mide instrucciones 68k.
+- Un binario 68k corriendo en un PowerPC va emulado: una FAT debe arrancar por el lado PEF. `native_cpu` no lo demuestra,
+  porque informa la CPU, no el lado que corre; compararlo con `decbench` nativo si hay dudas.
+
 ## Programa de benchmark (bench/)
 Aplicación con una única ventana (o consola mínima) que:
 1. Ejecuta las pruebas del banco (etapas 1-3) según un menú o una lista fija.
@@ -55,17 +72,16 @@ run,usec_total,frames,samples_out
 Mantener CSV simple para que `bench-analyst` lo procese con scripts de `tools/`.
 
 ### Variante de la etapa 1: `bench_results_micro.txt`
-Escrito por `bench/microbench.c`. Misma cabecera (`build`, `machine`, `cache`, ...) más
+Escrito por `targets/microbench.c` (solo rama `68k`). Misma cabecera (`build`, `machine`, `cache`, ...) más
 `assumed_clock_mhz`. Cada test es un bloque `test:` / `unit:` / `run,usec_total,ops`
 (la columna `ops` reemplaza a `frames,samples_out`, que no aplican a una instrucción).
 La pasada 1 es fría. Al final, una sección `summary,...` con
 `name,min_usec,med_usec,net_usec,ops,ns_per_op,cycles_per_op,MB_per_s`.
 Detalle en `docs/ETAPA1.md`. El agente `bench-analyst` ya conoce esta variante.
 
-## Transferencia al LC 580
-Método por definir (pregunta abierta nº 2 de `SPECS.md`). Opciones: disquete de 1,44 MB
-con `.dsk`, SCSI, AppleShare/Ethernet, tarjeta CF/IDE. Automatizar en `tools/`.
-Para devolver resultados: copiar `bench_results.txt` por el mismo medio.
+## Transferencia a los equipos
+LC 580: Compact Flash con adaptador IDE (`targets/package-visit.sh`, rama `68k`, arma `dist/visita1/`). Mac con 601: por
+definir. Para devolver resultados: copiar `bench_results.txt` por el mismo medio.
 
 ## Entrega de resultados
 Víctor copia el archivo a `bench/results/<fecha>_<equipo>.txt`; `bench-analyst` lo
@@ -73,7 +89,7 @@ registra en `docs/PERF_LOG.md` con la plantilla y propone el siguiente paso.
 
 ## Comprobaciones antes de pedir una prueba
 - [ ] Compila sin warnings relevantes.
-- [ ] objdump sin instrucciones de FPU.
+- [ ] 68k: objdump sin instrucciones de FPU. PPC: objdump sin `mftb`.
 - [ ] Pruebas bit a bit en verde en Basilisk II (JIT sí/no).
 - [ ] El binario cabe en el medio de transferencia.
 - [ ] Hay instrucciones claras para Víctor (qué abrir, qué archivo devolver).

@@ -1,10 +1,24 @@
 # MP368K
 
-An MP3 player for 68k Macintosh computers, built for a **Macintosh LC 580** (68LC040 at 33 MHz, **no FPU**, 16 MB RAM) running Mac OS 8.1. It decodes in fixed point with [libmad](https://www.underbit.com/products/mad/) and has a Mac OS 8 Platinum-style interface.
+An audio player for classic Mac OS. It started as an MP3 player for a **Macintosh LC 580** (68LC040 at 33 MHz, **no FPU**, 16 MB RAM) running Mac OS 8.1, and it is forking into a 68k version and a PowerPC version. It decodes in fixed point with [libmad](https://www.underbit.com/products/mad/) and has a Mac OS 8 Platinum-style interface.
 
-> **Status: work in progress.** Everything has been tested on a PC and in an emulator (Infinite Mac, Quadra 650 ROM, Mac OS 8.1). **Nothing has been measured on a real LC 580 yet**, so there are no valid performance numbers for that machine. Anything unmeasured is marked "unmeasured" in `docs/PERF_LOG.md`.
+> **Status: work in progress.** The 68k MP3 player has been tested on a PC and in an emulator (Infinite Mac, Quadra 650 ROM, Mac OS 8.1). **Nothing has been measured on real hardware yet**, so there are no valid performance numbers for any machine. Anything unmeasured is marked "sin medir" (unmeasured) in `docs/PERF_LOG.md`.
+
+## Branches
+
+| Branch | Target | Language | What is there today |
+|---|---|---|---|
+| `master` | shared code and documents | portable C | builds PC tests only |
+| `68k` | Macintosh LC 580 (68LC040) | C, plus 68040 assembly for decoding kernels (not written yet) | the full MP3 player |
+| `ppc` | Power Macintosh with a PowerPC 601 | C only | `sysprobe` only; the player has not been ported yet |
+
+Three builds come out of them: **68k**, **PowerPC** and **FAT** (one file with both). The FAT currently contains `sysprobe` only, and has not been run on either side yet.
+
+**Planned, not implemented** ([`docs/ETAPA6.md`](docs/ETAPA6.md)): the PowerPC port, FLAC, Ogg Vorbis and WMA decoding, other formats through QuickTime, a 10-band equalizer, an icon, and assembly kernels on the `68k` branch. Whether Ogg and WMA can reach real time on a 33 MHz 68LC040 is unknown.
 
 ## Features
+
+These describe the MP3 player on the `68k` branch.
 
 - Plays MPEG-1/2 Layer III (CBR and VBR), streaming continuously from disk through the Sound Manager (double buffering).
 - Quality profiles: **Full**, **Half Rate**, **Mono**, **Half Rate Mono**, and **Automatic** (picks one based on measured decoding speed).
@@ -17,21 +31,23 @@ An MP3 player for 68k Macintosh computers, built for a **Macintosh LC 580** (68L
 ## How it is built
 
 - **C** with the [Retro68](https://github.com/autc04/Retro68) GCC; 68k assembly only where a measurement justifies it (there are no assembly kernels yet).
-- **No FPU:** `-m68040 -msoft-float`, verified on every build with `objdump` (`tools/check-nofpu.sh`).
+- **No FPU on 68k:** `-m68040 -msoft-float`, verified on every build with `objdump` (`targets/check-nofpu.sh`, on the `68k` branch).
 - **libmad 0.15.1b**, unmodified (`FPM_64BIT`). The Half Rate and Mono profiles are built on its API; profiling uses a patched copy, never the original.
 - The decoder and the playlist/tag modules are **portable**: they are tested on the PC with the same sources that are compiled for 68k.
-- Project rule: *measure before optimizing*. A performance change is only accepted with a measurement on the LC 580.
+- Project rule: *no speed claim without a measurement*. Assembly may be written before measuring, but each kernel keeps a C reference, a bit-exact test and a C/assembly build switch, and it is not called faster until it has been measured on the real machine.
 
 ## Building
 
 Host requirements (Linux): `cmake gmp mpfr libmpc boost bison flex texinfo ruby`, plus `sox lame ffmpeg python3 numpy` for the tests.
 
 ```sh
-tools/build-toolchain.sh    # builds Retro68 (68k only), takes 30-60 min
-tools/build.sh              # builds every application and checks for FPU instructions
+tools/build-toolchain.sh    # builds Retro68 (68k and classic PowerPC), takes about an hour
+git switch 68k              # or ppc; master does not build Mac applications
+tools/build.sh              # builds this branch and runs its checks
+tools/build-all.sh          # the three builds, from the committed 68k and ppc branches
 ```
 
-Artifacts land in `dist/<app>/` (`.bin` MacBinary, `.dsk` HFS disk image, and `.rsrc`/`.finf` for a Basilisk II shared folder). The player is `dist/mp368k/`.
+Artifacts land in `dist/<target>/<app>/`, where the target is `68k`, `ppc` or `fat` (`.bin` MacBinary, `.dsk` HFS disk image, and `.rsrc`/`.finf` for a Basilisk II shared folder). The player is `dist/68k/mp368k/`.
 
 ## Tests (on the PC)
 
@@ -45,7 +61,7 @@ The audio decoded for 68k is bit-for-bit identical to the PC's (compared by CRC-
 
 ## Test programs for the real machine
 
-Applications meant to be taken to the LC 580 and measured (`tools/package-visit.sh` assembles `dist/visita1/`):
+Applications meant to be taken to the LC 580 and measured (on the `68k` branch, `targets/package-visit.sh` assembles `dist/visita1/`):
 
 | App | What it measures |
 |---|---|
@@ -64,15 +80,16 @@ src/player/     application: engine, windows, playlist, resources
 bench/          benchmarks without audio
 tests/host/     PC tests
 third_party/    libmad (GPL) and profiling patches
-tools/          build, packaging and test scripts
+tools/          build and test scripts
 docs/           decisions (ADRs), stage specs, performance log
+targets/        68k and ppc branches only: flags, clock, hooks, target-specific code
 ```
 
-Main documents (currently in Spanish): [`SPECS.md`](SPECS.md), [`docs/DECISIONS.md`](docs/DECISIONS.md), [`docs/PERF_LOG.md`](docs/PERF_LOG.md), [`docs/UI.md`](docs/UI.md), [`docs/HARDWARE_LC580.md`](docs/HARDWARE_LC580.md).
+Main documents (currently in Spanish): [`SPECS.md`](SPECS.md), [`docs/SPECS_68K.md`](docs/SPECS_68K.md), [`docs/SPECS_PPC.md`](docs/SPECS_PPC.md), [`docs/ETAPA6.md`](docs/ETAPA6.md), [`docs/DECISIONS.md`](docs/DECISIONS.md), [`docs/PERF_LOG.md`](docs/PERF_LOG.md), [`docs/UI.md`](docs/UI.md), [`docs/HARDWARE_LC580.md`](docs/HARDWARE_LC580.md), [`docs/HARDWARE_PPC601.md`](docs/HARDWARE_PPC601.md).
 
 ## License
 
-Personal-use project. Because it includes libmad, the resulting binary is **GPL** (libmad is GPL v2 or later); copyright notices are kept in `third_party/libmad/`. *(A `LICENSE` file has yet to be added to the repository.)*
+Personal-use project, released under the **GPL v3** ([`LICENSE`](LICENSE)). It includes libmad, which is GPL v2 or later; copyright notices are kept in `third_party/libmad/`.
 
 No Apple ROMs or system images are included.
 <img width="808" height="604" alt="image" src="https://github.com/user-attachments/assets/7e7d1c2c-079b-46f1-ace9-142621bbaa5b" />

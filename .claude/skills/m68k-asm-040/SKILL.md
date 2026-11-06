@@ -1,15 +1,17 @@
 ---
 name: m68k-asm-040
-description: Guía para escribir y optimizar ensamblador Motorola 68040 (68LC040 sin FPU) dentro del proyecto MP368K: convención de llamada GCC, particularidades del 040, plantilla de kernel, pruebas bit a bit contra C y metodología de medición. Usar al crear o modificar cualquier archivo en asm/.
+description: Guía para escribir y optimizar ensamblador Motorola 68040 (68LC040 sin FPU) en la rama 68k de MP368K: convención de llamada GCC, particularidades del 040, plantilla de kernel, pruebas bit a bit contra C, selector C/asm y metodología de medición. Usar al crear o modificar cualquier archivo en targets/asm/.
 ---
 
 # Ensamblador 68040 para kernels de audio
 
 ## Principios
-1. **Medir antes de escribir asm.** Solo se reescribe lo que `docs/PERF_LOG.md` muestre
-   como costoso.
-2. Cada kernel: `src/<k>_ref.c` (referencia) + `asm/<k>_040.s` + `tests/test_<k>.c`
-   (bit a bit) + medición antes/después.
+1. **Se puede escribir antes de medir (ADR-008), pero nada se declara más rápido sin
+   medir.** El orden de los kernels es una sospecha: `decprofile` en el emulador es una guía
+   débil y los conteos de instrucciones son estimaciones marcadas como tales. Si la medición del
+   LC 580 dice que un kernel no ayuda, vuelve a C.
+2. Cada kernel: `src/<k>_ref.c` (referencia, en `master`) + `targets/asm/<k>_040.s` (rama `68k`) +
+   `tests/test_<k>.c` (bit a bit) + **selector C/asm al compilar** + medición cuando sea posible.
 3. Sin código auto-modificable. Sin saltos a datos. Sin depender de temporización.
 4. Sin FPU: toda aritmética en enteros.
 
@@ -46,7 +48,7 @@ mantener un único estilo en todo el repositorio.
 
 ## Plantilla de kernel (adaptar a la sintaxis confirmada)
 ```
-/* asm/dct32_040.s — DCT de 32 puntos, punto fijo mad_fixed_t (28 bits)
+/* targets/asm/dct32_040.s — DCT de 32 puntos, punto fijo mad_fixed_t (28 bits)
  * Referencia: src/dct32_ref.c   Prueba: tests/test_dct32.c
  * Entradas : (pila) puntero in[32], puntero out[32]
  * Preserva : d2-d7/a2-a6
@@ -72,6 +74,10 @@ _dct32_040:
 4. **Requantización:** tablas de potencias en 4/3 en lugar de calcular.
 5. **Huffman:** tablas planas por nivel, lectura de bits con acumulador de 32 bits.
 6. **Conversión a PCM:** redondeo y saturación con `MOVE16` solo si ayuda (medir).
+
+Otros formatos (6-68K; lista completa en `docs/SPECS_68K.md`): residuos Rice y LPC de FLAC; IMDCT, residuos y
+piso de Vorbis; IMDCT de WMA; ganancia por coeficiente del EQ. Elegir la estrategia tras leer el código real de
+cada biblioteca (skill `audio-formats`).
 
 ## Pruebas bit a bit
 - `tests/test_<k>.c` genera vectores con semilla fija, ejecuta referencia y asm, y

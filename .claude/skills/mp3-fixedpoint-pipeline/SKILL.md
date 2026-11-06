@@ -11,6 +11,14 @@ description: Mapa del decodificador MP3 de punto fijo (libmad) para MP368K: etap
 - Solo `main_data` y `overlap` usan malloc, y se pueden suministrar estáticos.
 - `synth_half` = decimación sin filtro. MONO por mezcla en subbandas funciona.
 
+## Las dos ramas
+- **Ambas usan `FPM_64BIT`**, para que el PCM sea idéntico bit a bit en 68k, PPC y PC. La rama `ppc` no usa `FPM_PPC`:
+  es ensamblador en línea y cambia el redondeo.
+- **Ecualizador (ADR-011):** se aplica a las 576 líneas de frecuencia antes de la IMDCT, con un parche sobre una copia de
+  libmad, como el de perfilado. Las subbandas miden ~689 Hz y no separan las bandas graves. Con el EQ en plano, el PCM
+  debe seguir idéntico a la referencia.
+- Los demás formatos están en la skill `audio-formats`.
+
 ## Fuente
 libmad (MAD, punto fijo, GPL). Ubicar el código en `third_party/libmad/` con su licencia.
 Descargar una versión estable (la última conocida es 0.15.1b; **verificar** y registrar
@@ -32,7 +40,8 @@ de memoria: **confirmarlos leyendo el código** antes de basarse en ellos.
 | Síntesis polifásica | `synth.c`: `dct32`, `synth_full`, `synth_half` | **alto (hipótesis)** |
 | Conversión a PCM | código del usuario (redondeo/saturación de `mad_fixed_t`) | medio |
 
-Confirmar el orden real de costo con la etapa 3 de `SPECS.md`. No optimizar por intuición.
+Confirmar el orden real de costo con la etapa 3 de `SPECS.md`. El asm puede escribirse antes de esa
+medición (ADR-008), pero la intuición no reemplaza a la medición al declarar una mejora.
 
 ## Formato numérico
 - `mad_fixed_t`: entero con signo de 32 bits, 28 bits fraccionarios (`MAD_F_FRACBITS`),

@@ -2,7 +2,7 @@
  * mactime — reloj de microsegundos del Time Manager.
  *
  * Las Multiversal Interfaces de Retro68 solo declaran Microseconds() para
- * Executor, así que aquí va la glue del trap _Microseconds (A193) a mano.
+ * Executor, así que cada equipo lo resuelve a mano en targets/mactime.c.
  * Requiere el Time Manager extendido (System 7+; Gestalt 'tmgr' >= 3).
  */
 #ifndef MP368K_MACTIME_H

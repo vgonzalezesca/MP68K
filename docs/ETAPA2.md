@@ -26,8 +26,9 @@ de la síntesis. Ver ADR-006. La calidad de HALF **no se ha escuchado**.
 ```sh
 tools/make_testfiles.sh     # genera tests/data/*.mp3 (60 s, 128/192/mono)
 tools/host-ref.sh           # oráculo del PC -> tests/data/REFERENCE.txt
-tools/build.sh              # compila las 3 apps (verifica FPU)
-tools/package-visit.sh      # arma dist/visita1/
+git switch 68k
+tools/build.sh              # compila las apps (verifica FPU)
+targets/package-visit.sh    # arma dist/visita1/
 ```
 
 Puedes reemplazar los MP3 por música tuya con los mismos nombres (`test128.mp3`,

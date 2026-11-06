@@ -4,6 +4,8 @@ Formato: contexto → decisión → consecuencias → cuándo revisarla.
 
 ## ADR-001 — Lenguaje: C + ensamblador 68k (sin Pascal)
 
+*Ajustada por ADR-008: el asm ya no espera una medición previa. Rige solo en la rama `68k`; la rama `ppc` es solo C.*
+
 **Contexto.** El objetivo es MP3 hasta 192 kbps estéreo en un 68LC040 a 33 MHz.
 Se consideraron ensamblador, Pascal y C.
 
@@ -55,8 +57,10 @@ duplicar el resto del decodificador.
 
 ## ADR-004 — Medición solo en hardware real
 
+*Ajustada por ADR-008: sigue vigente para **confirmar** una mejora, ya no como requisito para escribir asm.*
+
 **Decisión.** Basilisk II valida lógica y regresiones; el rendimiento se acepta solo
-con mediciones del LC 580 registradas en `PERF_LOG.md`.
+con mediciones del equipo real registradas en `PERF_LOG.md`.
 
 ## ADR-005 — Toolchain: Retro68 con Multiversal Interfaces
 
@@ -64,13 +68,14 @@ con mediciones del LC 580 registradas en `PERF_LOG.md`.
 flags para el 68LC040 sin FPU.
 
 **Decisión.**
-- Retro68 commit `d77319746eb3` (2026-10-28), solo 68k (`build-toolchain.bash --no-ppc`),
+- Retro68 commit `d77319746eb3` (2026-10-28), 68k y PowerPC clásico, sin Carbon
+  (`build-toolchain.bash --no-carbon`; hasta la bifurcación fue `--no-ppc`),
   en `~/Retro68` / `~/Retro68-build`. Script: `tools/build-toolchain.sh`.
 - **Multiversal Interfaces** (las libres, incluidas en Retro68) por ahora.
 - Flags: `-O2 -m68040 -msoft-float -fomit-frame-pointer -ffunction-sections
   -fdata-sections`; enlace con `-Wl,-gc-sections`. Se conservan los nombres para MacsBug.
-  **Por verificar** al compilar que GCC acepte la combinación y que `check-nofpu.sh`
-  quede en cero.
+  **Por verificar** al compilar que GCC acepte la combinación y que `targets/check-nofpu.sh`
+  quede en cero. Los flags de cada equipo están en `targets/target.cmake`.
 - Las bibliotecas de Retro68 vienen compiladas para 68000 (`--with-cpu=m68000`); es
   código válido en el 040.
 
@@ -140,6 +145,100 @@ el MPW 3.5 GM y se recompila Retro68 con `--universal`.
 
 **Revisar si** la etapa 4 compara `OPT_SPEED`/`OPT_SSO` o `ASO_ZEROCHECK` (cambian el PCM:
 tendrían su propio CRC de referencia) o si el RTF baseline obliga a un `HALF` propio.
+
+## ADR-007 — Bifurcación en ramas de git: `master`, `68k` y `ppc`
+
+**Contexto.** Víctor quiere una versión PowerPC como bifurcación, con la etapa 6 pedida en tres solicitudes: 68k, PPC y
+el proyecto conjunto. Se comparó una sola rama con carpetas por equipo contra ramas de git separadas.
+
+**Decisión (de Víctor).** Ramas de git. `master` es la general; `68k` y `ppc` nacen de ella.
+- Se usa `master` y no `main`: `MP68K/main` solo tiene `LICENSE` y un README, sin historia común con el código.
+- Flujo único: `master` → `68k` y `master` → `ppc`. Nunca entre ramas de equipo ni de vuelta a `master`.
+- Lo propio de un equipo vive en `targets/`, con las mismas rutas en ambas ramas, detrás de `src/platform.h`. `master`
+  no tiene `targets/` y no compila apps Mac, solo pruebas de PC.
+- Documentos, skills, agentes y `PERF_LOG.md` se editan solo en `master`. `TARGET.md` es distinto en cada rama y
+  `CLAUDE.md` lo importa, para no tener un `CLAUDE.md` por rama.
+
+**Consecuencias.** Cada cambio general se fusiona dos veces. La FAT compila desde dos ramas con worktrees (ADR-012). Un
+cambio general solo queda probado en un Mac después de fusionarlo.
+
+**Revisar si** las fusiones se vuelven costosas; entonces, volver a una sola rama con carpetas es directo, porque
+`targets/` ya separa el código.
+
+## ADR-008 — Asm antes de medir en el LC 580
+
+**Contexto.** ADR-001 y ADR-004 prohibían escribir asm sin una medición del LC 580. Víctor no quiere esperar esas
+lecturas y pidió pasar a asm lo más sensible de la decodificación de cada formato.
+
+**Decisión (de Víctor).** Se permite escribir kernels antes de medir, con estas condiciones obligatorias: referencia en
+C, prueba bit a bit, selector C/asm al compilar y marca `sin medir`.
+
+**Consecuencias.** Se puede invertir esfuerzo en kernels que al final no sean los que importan: el orden es una sospecha,
+con `decprofile` del emulador como guía débil. El selector permite compararlos en el mismo equipo apenas haya acceso a
+él. No cambia la regla de honestidad: nada se declara más rápido sin medición real.
+
+**Revisar cuando** haya mediciones del LC 580: un kernel que no ayuda vuelve a C.
+
+## ADR-009 — Formatos propios: FLAC, Ogg Vorbis y WMA
+
+**Contexto.** Hay que decodificar sin FPU en el 68LC040 y con licencia compatible con GPL.
+
+**Decisión (a confirmar al traer cada biblioteca en la 6-G, leyendo su código y su licencia).**
+- **Ogg Vorbis:** Tremor, decodificador entero de Xiph. Sin Opus ni FLAC dentro de Ogg.
+- **WMA:** `libwma` de Rockbox (punto fijo, derivada de FFmpeg), v1/v2. Sin Pro, Lossless, Voice ni DRM. Un hilo de
+  MPlayer-dev de 2008 reporta ruido audible en algunos flujos: probarla contra `ffmpeg`.
+- **FLAC:** elegir tras leer el código; candidatas: dr_flac, libFLAC y la de Rockbox.
+
+**Consecuencias.** Más memoria y más código, lo que agrava la regla de 32 KB por segmento. Tremor y WMA pueden asignar
+memoria durante la decodificación: hay que revisarlo contra las reglas 6 y 7. Vorbis y WMA pueden no alcanzar tiempo real
+en el 68LC040 (sin medir). El código WMA deriva de ingeniería inversa: revisar antes de distribuir binarios.
+
+## ADR-010 — QuickTime como respaldo para los demás formatos
+
+**Contexto.** Víctor quiere soportar AIFF, WAV, SND y otros sin esfuerzo, a través del framework QuickTime.
+
+**Decisión.** Lo que la capa de códecs no reconozca se abre con el Movie Toolbox (`EnterMovies`, `NewMovieFromFile`,
+`MoviesTask`...). Los lectores propios de WAV/AIFF se descartan por ahora.
+
+**Hallazgos (verificado en los headers y bibliotecas).** Las Multiversal traen solo 21 funciones de QuickTime, sin
+`GetMovieDuration`, `GetMovieTime`, `GetMovieTimeScale`, `SetMovieTimeValue` ni `SetMovieVolume`. `libQuickTimeLib.a` de
+PPC las exporta, pero no están declaradas. Hay que escribir las declaraciones y, para 68k, sus selectores del trap
+`0xAAAA`, que **no se pueden probar aquí**.
+
+**Consecuencias.**
+- QuickTime manda el audio directo al Sound Manager, por su propio canal: **sin ecualizador en ningún equipo**, y hay que
+  cerrar nuestro canal mientras se usa.
+- Depende de la versión instalada en cada equipo; comprobar con Gestalt y avisar si falta.
+- Si abrir archivos que no son películas con `NewMovieFromFile` exige QuickTime 3 o posterior: por verificar.
+
+**Revisar si** se quiere EQ en WAV/AIFF: se agregan lectores propios, que además funcionarían sin QuickTime.
+
+## ADR-011 — Ecualizador de 10 bandas según el formato
+
+**Contexto.** Víctor pidió un ecualizador de 10 bandas igual al de Winamp; antes lo había descartado. Filtrar muestra a
+muestra costaría ≈ 267 % de la CPU del 68LC040 (aritmética, `docs/SPECS_68K.md`).
+
+**Decisión (de Víctor).** Por coeficientes para MP3, Vorbis y WMA en ambos equipos; filtros muestra a muestra para FLAC,
+solo en `ppc`; sin EQ en QuickTime, con los controles desactivados. Aspecto Platinum, no el de Winamp.
+
+**Bandas.** 70, 180, 320, 600, 1k, 3k, 6k, 12k, 14k y 16k Hz, según indicó Víctor. **Sin fuente primaria de Winamp:** la
+documentación de VLC lista 60/170/310 para las tres primeras. Es una tabla: se corrige sin costo si un Winamp real
+muestra otra cosa. El rango de ganancia también queda por confirmar (±12 dB como valor inicial; VLC documenta ±20 dB).
+
+**Consecuencias.** No suena igual que un filtro en el dominio del tiempo: en bloques cortos de MP3 hay menos resolución
+en frecuencia. En MP3 hay que parchear una copia de libmad; el árbol `third_party/libmad/` sigue sin modificar. Se
+permite `float` solo en `targets/` de la rama `ppc`.
+
+## ADR-012 — FAT armada con Rez desde dos ramas
+
+**Contexto.** Víctor pidió una compilación FAT. Retro68 no la documenta, pero `add_application` muestra los ingredientes:
+en 68k, `--copy <app>.code.bin`; en PPC, `RetroPPCAPPL.r` (`cfrg`) y `--data <app>.pef`.
+
+**Decisión.** `tools/build-all.sh` compila los commits de `68k` y `ppc` en worktrees bajo `build/wt/` y combina ambos en
+una sola llamada a `Rez`. Solo entran las apps que existan en las dos ramas.
+
+**Consecuencias.** La FAT no ve cambios sin confirmar. Se comprueba la estructura del archivo; **que arranque en cada lado
+solo lo prueba Víctor**, primero con `sysprobe`.
 
 ## Plantilla para nuevas decisiones
 

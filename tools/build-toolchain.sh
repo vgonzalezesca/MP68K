@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Compila el toolchain Retro68 (solo 68k) en CachyOS/Arch.
+# Compila el toolchain Retro68 (68k y PowerPC clásico, sin Carbon) en CachyOS/Arch.
 #
 # Rutas (configurables):
 #   RETRO68_SRC    fuente de Retro68         (por defecto ~/Retro68)
@@ -34,14 +34,15 @@ git -C "$RETRO68_SRC" log -1 --format='%H %cd' > "$RETRO68_BUILD/RETRO68_COMMIT"
 echo "Retro68: $(cat "$RETRO68_BUILD/RETRO68_COMMIT")"
 
 extra=()
-# Si gcc y binutils ya se compilaron (por ejemplo, falló después por boost),
-# no repetirlos.
-if [[ -x $RETRO68_BUILD/toolchain/bin/m68k-apple-macos-gcc ]]; then
+# Si gcc y binutils de ambos equipos ya se compilaron (por ejemplo, falló después por
+# boost), no repetirlos. Con solo uno de los dos hay que compilar todo.
+if [[ -x $RETRO68_BUILD/toolchain/bin/m68k-apple-macos-gcc &&
+      -x $RETRO68_BUILD/toolchain/bin/powerpc-apple-macos-gcc ]]; then
     extra+=(--skip-thirdparty)
 fi
 
 cd "$RETRO68_BUILD"
-"$RETRO68_SRC/build-toolchain.bash" --no-ppc "${extra[@]}" 2>&1 | tee build-toolchain.log
+"$RETRO68_SRC/build-toolchain.bash" --no-carbon "${extra[@]}" 2>&1 | tee build-toolchain.log
 
 echo
 echo "Listo. Herramientas en: $RETRO68_BUILD/toolchain/bin"

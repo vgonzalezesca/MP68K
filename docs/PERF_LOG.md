@@ -17,10 +17,10 @@ por Víctor en el equipo indicado.
 
 ```
 ### AAAA-MM-DD — <qué se midió>
-Equipo: LC 580 real / Basilisk II (JIT sí|no)
-System: 7.x.x
-Commit: <hash>   Flags: <-O2 -m68040 -msoft-float ...>
-Archivo: <nombre, bitrate, canales>   Perfil: FULL|HALF|MONO|HALF_MONO
+Equipo: LC 580 real / Mac con 601 real (modelo) / emulador (cuál; JIT sí|no)
+System: x.x.x
+Build: <68k-hash | ppc-hash>   Flags: <los que imprime el programa>   Kernels: C | asm
+Archivo: <nombre, formato, bitrate, canales>   Perfil: FULL|HALF|MONO|HALF_MONO   EQ: on|off
 
 | Prueba | Mediana | Mínimo | Observaciones |
 |---|---|---|---|
@@ -61,11 +61,31 @@ Decisión derivada:
 | Síntesis polifásica (DCT32 + ventana) |  | sin medir |
 | Conversión a PCM |  | sin medir |
 
-## Etapa 4 — Kernels
+## Etapa 4 / 6-68K — Kernels en asm (LC 580)
 
-| Kernel | Antes (RTF) | Después (RTF) | Prueba bit a bit | Commit |
-|---|---|---|---|---|
-|  |  |  |  |  |
+Se pueden escribir antes de medir (ADR-008). Un kernel sin medir **no** se considera más rápido.
+
+| Formato | Kernel | RTF con C | RTF con asm | Prueba bit a bit | Build | Estado |
+|---|---|---|---|---|---|---|
+|  |  |  |  |  |  | sin medir |
+
+## Etapa 6-PPC — RTF baseline en el Mac con 601
+
+Modelo del equipo: por confirmar.
+
+| Archivo | Perfil | RTF | Estado |
+|---|---|---|---|
+| 128 kbps estéreo | FULL |  | sin medir |
+| 192 kbps estéreo | FULL |  | sin medir |
+
+## Etapa 6-G — RTF por formato
+
+| Formato | Archivo | RTF LC 580 | RTF Mac con 601 | EQ | Estado |
+|---|---|---|---|---|---|
+| FLAC | 16 bits, 44,1 kHz, estéreo |  |  | off | sin medir |
+| Ogg Vorbis | calidad por definir |  |  | off | sin medir |
+| WMA v2 | 128 kbps |  |  | off | sin medir |
+| MP3 | 192 kbps estéreo |  |  | on | sin medir |
 
 ## Registro cronológico
 (agregar entradas con la plantilla de arriba)

@@ -13,11 +13,12 @@ tools/build-toolchain.sh                 # 30-60 min; log en ~/Retro68-build/bui
 ## 2. Compilar
 
 ```sh
+git switch 68k     # o ppc; master no compila apps Mac
 tools/build.sh
 ```
 
-Compila, verifica que no haya instrucciones de FPU (`tools/check-nofpu.sh`) y deja los
-artefactos en `dist/sysprobe/`:
+Compila, verifica que no haya instrucciones de FPU (`targets/check-nofpu.sh`, en la rama `68k`) y deja los
+artefactos en `dist/68k/sysprobe/`:
 
 | Archivo | Para qué |
 |---|---|

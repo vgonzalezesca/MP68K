@@ -3,8 +3,8 @@
 Aspecto del tema **Platinum de Mac OS 8** (decisión de Víctor, que descartó el estilo Winamp
 oscuro de la 5b-1): fondo gris claro, biseles, pozos hundidos y la fuente del sistema. Dibujo propio
 con QuickDraw en color: las Multiversal Interfaces no traen las APIs de temas del Appearance Manager,
-así que se imita el aspecto (funciona en cualquier System 7 o posterior). Sin visualizador de espectro
-ni ecualizador. **Todo el texto visible está en inglés de EE. UU.**
+así que se imita el aspecto (funciona en cualquier System 7 o posterior). Sin visualizador de espectro.
+**Todo el texto visible está en inglés de EE. UU.**
 
 Todo esto está **compilado pero sin ver en pantalla**: el aspecto se ajusta con capturas de Víctor.
 
@@ -63,10 +63,10 @@ así que no parpadea y no hace falta un GWorld.
 - Botones y deslizadores se siguen con `StillDown`/`GetMouse`; dentro de esos bucles y de la barra de
   desplazamiento se llama a `player_idle()` para no cortar el audio.
 - **Menús y arrastre de ventanas:** durante `MenuSelect` y `DragWindow` el sistema corre su propio bucle. Se
-  instalan `MenuHook` (0x0A30) y `DragHook` (0x09F6) con un puente en ensamblador que conserva todos los
-  registros y llama a `player_idle()`. **No verificado en Mac OS 8.1 con el menú Platinum**: se comprueba
-  mirando que `gap` no crezca con un menú abierto. Si el sistema no llama a los ganchos, el audio dura lo
-  que dure el anillo (4 s).
+  instalan `MenuHook` (0x0A30) y `DragHook` (0x09F6) en `targets/hooks.c`: en 68k, un puente en ensamblador
+  que conserva todos los registros y llama a `player_idle()`; en PPC, un descriptor de Mixed Mode.
+  **No verificado en Mac OS 8.1 con el menú Platinum**: se comprueba mirando que `gap` no crezca con un menú
+  abierto. Si el sistema no llama a los ganchos, el audio dura lo que dure el anillo (4 s).
 - Los diálogos modales (abrir archivo, "About") pausan la reproducción mientras están abiertos.
 - Teclado: Space = reproducir/pausa; ←/→ = −5 s / +5 s; ⌘O, ⌘D (Add Files), ⌘F (Add Folder), ⌘W, ⌘Q, ⌘P
   (Play/Pause), ⌘. (Stop), ⌘[ y ⌘] (Previous/Next), ⌘L (Playlist).
@@ -93,3 +93,13 @@ Options (Audio Output: Automatic / 8-bit / 16-bit, Show Technical Info) · Windo
   la tabla de Xing (error medido < 0,3 % del archivo en un archivo de prueba); VBRI y VBR sin tabla usan
   búsqueda lineal.
 - Hasta 512 entradas. Siguiente/Anterior, Shuffle y Repeat siguen `src/order.c` (probado en el PC).
+
+## Pendiente de la 6-G (sin implementar)
+
+- **Ventana del ecualizador (en-US, Platinum):** casilla **On**, deslizador vertical **Preamp** y 10 deslizadores
+  verticales rotulados `70 180 320 600 1K 3K 6K 12K 14K 16K`, en el mismo estilo de `ui_draw.c`. Sin presets. Se abre desde
+  el menú Window. Cuando el formato o el equipo no lo permiten, los controles se desactivan y un texto explica por qué
+  (ADR-011). Mantener la regla de la interfaz: redibujar solo lo que cambia.
+- **Logo:** ícono de la app (`icl8`, `ics8`, `ICN#`, `ics#`, con `BNDL` y `FREF` para el creador `M368`) y una versión
+  mayor en el cuadro About, en la paleta del sistema de 256 colores. Se basa en la imagen que aportó Víctor (anillos
+  concéntricos verde azulado sobre una forma redondeada).

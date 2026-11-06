@@ -135,7 +135,13 @@ static void probe_gestalt(void)
         textlog_printf("  fpu: %s\n", (v >= 0 && v <= 3) ? kFpu[v] : "desconocida");
     if (gestalt("mmu", gestaltMMUType, &v))
         textlog_printf("  mmu: %s\n", (v >= 0 && v <= 4) ? kMmu[v] : "desconocida");
-    gestalt("native_cpu", gestaltNativeCPUtype, NULL);
+    /* En un PowerPC, "processor" informa el 68k emulado; la CPU real sale de aquí. */
+    if (gestalt("native_cpu", gestaltNativeCPUtype, &v))
+        textlog_printf("  cpu nativa: %s\n",
+                       v == 0x0004 ? "68040" : v == 0x0101 ? "PowerPC 601" :
+                       v == 0x0103 ? "PowerPC 603" : v == 0x0104 ? "PowerPC 604" :
+                       v == 0x0106 ? "PowerPC 603e" : v == 0x0107 ? "PowerPC 603ev" :
+                       "otra");
     gestalt("sys_arch", gestaltSysArchitecture, NULL);
     gestalt("proc_clock_hz", MP_gestaltProcClkSpeed, NULL);
     if (gestalt("phys_ram", gestaltPhysicalRAMSize, &v))

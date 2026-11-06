@@ -23,7 +23,7 @@ los de tabla restan `table_base` (el `add`+`and` del índice); los de lectura y 
 
 ## Cómo ejecutarlo
 
-1. `tools/build.sh` deja `dist/microbench/` (`.bin` y `.dsk`).
+1. `tools/build.sh`, en la rama `68k`, deja `dist/68k/microbench/` (`.bin` y `.dsk`).
 2. Llevar `microbench` al LC 580 como `sysprobe` (ver `docs/ETAPA0.md`).
 3. Condiciones: sin otras aplicaciones abiertas, sin protector de pantalla, sin tocar el
    ratón mientras corre, AppleTalk desactivado si se puede. Anotar las extensiones activas.
@@ -57,7 +57,7 @@ Con fin de línea de Mac clásico (CR). En Linux: `tr '\r' '\n' < archivo > arch
 
 ## Limitaciones conocidas
 
-- El ensamblador de `bench/microbench.c` es instrumental de medición, no un kernel del
+- El ensamblador de `targets/microbench.c` (rama `68k`) es instrumental de medición, no un kernel del
   decodificador. Las instrucciones de multiplicación usan operandos fijos con aspecto
   aleatorio; si el 040 tuviera tiempos que dependen de los datos, esto no lo captura.
 - No se desactivan las interrupciones durante la medición; se confía en el mínimo de 5 pasadas.

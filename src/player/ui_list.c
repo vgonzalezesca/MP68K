@@ -329,7 +329,11 @@ void ui_list_click(Point where, unsigned long when)
             gTop = GetControlValue(c);
             draw_rows();
         } else {
-            TrackControl(c, where, (ControlActionUPP)scroll_action);
+            static ControlActionUPP scrollUPP;      /* en PPC es un descriptor: uno solo */
+
+            if (!scrollUPP)
+                scrollUPP = NewControlActionUPP(scroll_action);
+            TrackControl(c, where, scrollUPP);
         }
     } else if (PtInRect(where, &rAdd)) {
         if (track_button(&rAdd, "Add\311", true))

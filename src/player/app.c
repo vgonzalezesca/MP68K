@@ -8,7 +8,6 @@
 #include <Dialogs.h>
 #include <Events.h>
 #include <Fonts.h>
-#include <LowMem.h>
 #include <Memory.h>
 #include <Menus.h>
 #include <Quickdraw.h>
@@ -21,6 +20,7 @@
 #include <string.h>
 
 #include "macenv.h"
+#include "platform.h"
 #include "player.h"
 #include "playlist.h"
 #include "ui_list.h"
@@ -47,27 +47,6 @@ static Boolean gDebug;
 static unsigned gOutBits;               /* 0 = automático, 8, 16 */
 static Boolean gEndedSeen;
 
-/*
- * Ganchos de menú y arrastre: durante MenuSelect y DragWindow el sistema corre su propio
- * bucle y nuestro bucle de eventos no se ejecuta, así que el audio dejaba de alimentarse.
- * MenuHook (0x0A30) y DragHook (0x09F6) son rutinas que el sistema llama una y otra vez
- * durante esos bucles. Esperan que se conserven TODOS los registros, de ahí el puente en
- * ensamblador. Sin verificar en Mac OS 8.1 con el menú Platinum: si el sistema no los llama,
- * el audio dura lo que dure el anillo (4 s). Ver "gap" en la línea técnica.
- */
-__asm__(
-    ".text\n"
-    ".even\n"
-    ".globl mp_hook_stub\n"
-    "mp_hook_stub:\n"
-    "    movem.l %d0-%d7/%a0-%a6,-(%sp)\n"
-    "    jsr app_hook_idle\n"
-    "    movem.l (%sp)+,%d0-%d7/%a0-%a6\n"
-    "    rts\n");
-
-extern void mp_hook_stub(void);
-void app_hook_idle(void);
-
 void app_hook_idle(void)
 {
     static Boolean inside;
@@ -78,31 +57,6 @@ void app_hook_idle(void)
     player_idle();
     inside = false;
 }
-
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Warray-bounds"     /* variables globales del sistema en direcciones bajas */
-
-static long menu_select_with_hook(Point where)
-{
-    ProcPtr saved = LMGetMenuHook();
-    long result;
-
-    LMSetMenuHook((ProcPtr)(void *)mp_hook_stub);
-    result = MenuSelect(where);
-    LMSetMenuHook(saved);
-    return result;
-}
-
-static void drag_window_with_hook(WindowPtr win, Point where)
-{
-    ProcPtr saved = LMGetDragHook();
-
-    LMSetDragHook((ProcPtr)(void *)mp_hook_stub);
-    DragWindow(win, where, &qd.screenBits.bounds);
-    LMSetDragHook(saved);
-}
-
-#pragma GCC diagnostic pop
 
 /* ------------------------------------------------------------------------ */
 /* Mensajes                                                                  */
@@ -602,10 +556,10 @@ static void do_mouse_down(EventRecord *evt)
     switch (part) {
     case inMenuBar:
         update_menus();
-        do_menu(menu_select_with_hook(evt->where));
+        do_menu(platform_menu_select(evt->where));
         break;
     case inDrag:
-        drag_window_with_hook(win, evt->where);
+        platform_drag_window(win, evt->where);
         break;
     case inGoAway:
         if (TrackGoAway(win, evt->where)) {

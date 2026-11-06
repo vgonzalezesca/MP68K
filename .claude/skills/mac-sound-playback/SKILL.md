@@ -22,6 +22,15 @@ Sound** antes de usarlo.
   signo (silencio 0x80) con `SndPlayDoubleBuffer`. Falta confirmarlo en el LC 580.
 - Un `SIZE (-1)` propio en el `.r` de la app reemplaza al de `Retro68APPL.r` (queda uno solo).
 
+## Diferencias por equipo (sin verificar en un Mac)
+- **PPC:** el callback pasa por `NewSndDoubleBackUPP`, que en PPC crea un descriptor de Mixed Mode. Crear uno solo,
+  no uno por `audio_open` (hoy `audio.c` crea uno en cada apertura: corregir en la 6-PPC). `pascal` queda vacío y no hay
+  A5: las globales se resuelven por TOC. Comprobar que las reglas de interrupción sigan igual.
+- **68k (6-68K):** producir directamente el formato y la tasa nativos, para que el Sound Manager no convierta. Ver
+  `docs/SPECS_68K.md`.
+- **QuickTime (ADR-010):** abre su propio canal del Sound Manager. Cerrar el nuestro mientras se usa; no pasa por el
+  anillo, así que no hay ecualizador ni contador de cortes.
+
 ## Capacidades del equipo
 - Consultar con `Gestalt` el atributo de sonido (`gestaltSoundAttr`) y la versión del
   Sound Manager (`gestaltSoundMgrVersion`, si existe). Interesa: salida estéreo, 16 bits,

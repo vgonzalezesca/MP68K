@@ -314,6 +314,13 @@ OSErr player_init(void)
         return err;
     }
     codec_init(P.arena.data, (size_t)P.arena.size);
+    {
+        EqSettings es;
+
+        eq_flat(&es);
+        es.enabled = 1;                 /* activado y plano: no cuesta nada hasta mover una banda */
+        eq_set(&es);
+    }
     P.volume = 100;
     P.balance = 0;
     P.st.quality = QUALITY_AUTO;

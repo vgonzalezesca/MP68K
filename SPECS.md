@@ -14,8 +14,8 @@ Reproductor de audio para Mac OS clásico, en dos bifurcaciones y tres compilaci
 | FAT | ambas | los dos | un solo archivo con 68k y PPC |
 
 **Estado real hoy:** el reproductor de **MP3 en 68k** (probado en emulador, nada medido en un equipo real) y, compilados y probados
-solo en el PC, la capa de códecs y **FLAC** (falta verlos sonar en un Mac).
-PPC compila `sysprobe` y nada más. **Ogg Vorbis, WMA, QuickTime y el ecualizador no existen todavía**: son la etapa 6
+solo en el PC, la capa de códecs, **FLAC** y el **ecualizador del MP3** (FLAC se validó en el emulador con `codecbench`; falta oír ambos).
+PPC compila `sysprobe` y nada más. **Ogg Vorbis, WMA y QuickTime no existen todavía**: son la etapa 6
 (`docs/ETAPA6.md`). El logo está compilado, sin verlo en pantalla. Lo que sigue es el **objetivo**, no lo que hay.
 
 Formatos propios (objetivo): MP3 (hasta 192 kbps estéreo como meta en el LC 580), FLAC, Ogg Vorbis y WMA.

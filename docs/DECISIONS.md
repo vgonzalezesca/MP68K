@@ -246,6 +246,17 @@ solo en `ppc`; sin EQ en QuickTime, con los controles desactivados. Aspecto Plat
 documentación de VLC lista 60/170/310 para las tres primeras. Es una tabla: se corrige sin costo si un Winamp real
 muestra otra cosa. El rango de ganancia también queda por confirmar (±12 dB como valor inicial; VLC documenta ±20 dB).
 
+**Resolución (2026-11-06).** Implementado en `src/eq.c` (solo enteros) con un gancho en una copia parcheada de libmad
+(`third_party/patches/libmad-0.15.1b-eq.patch`; el original no se toca): una llamada por granulo y canal, antes de la alias-reduction en
+bloques largos y tras el reordenamiento en cortos y mixtos. Tras `III_reorder` un bloque corto queda como `18·sb + 6·w + k` y su frecuencia
+es `f = 6·sb + k`, equivalente a la línea larga `3f+1`: no hacen falta tablas de sfb. Ganancias en Q24 (no Q28: +24 dB es 15,85× y no
+cabe), tabla de 193 entradas en cuartos de dB generada por `tools/gen_eq_tables.py` y versionada, interpolación lineal en frecuencia entre
+centros con posición en **1/64 de línea** (con 1/16 la pendiente de ±12 dB entre bandas de graves dejaba 0,5 dB de error de posición, lo
+descubrió la prueba unitaria), multiplicación saturada. Con el gancho en NULL el PCM es idéntico bit a bit (verificado con los CRC de
+`REFERENCE_CODECS.txt` en 32 y 64 bits). **Medido en el PC:** 0,1–0,2 dB contra el modelo en 600 Hz–16 kHz y hasta 1,3 dB en 70/180/320 Hz
+(poca resolución). La latencia del anillo de 4 s se resuelve con un colchón objetivo de ~600 ms mientras la ventana está abierta, en vez de
+reiniciar la pista (un reinicio en MP3 VBR saltaría de posición). Costo en el LC 580: **sin medir**.
+
 **Consecuencias.** No suena igual que un filtro en el dominio del tiempo: en bloques cortos de MP3 hay menos resolución
 en frecuencia. En MP3 hay que parchear una copia de libmad; el árbol `third_party/libmad/` sigue sin modificar. Se
 permite `float` solo en `targets/` de la rama `ppc`.

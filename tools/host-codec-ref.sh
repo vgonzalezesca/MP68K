@@ -17,6 +17,7 @@ import os, subprocess, sys, tempfile, zlib
 import numpy as np
 
 root, binary, secs = sys.argv[1], sys.argv[2], int(sys.argv[3])
+EQ_BENCH = "12,-6,4,0,10,-12,8,0,-4,12,0"        # debe coincidir con kBenchEq de bench/codecbench.c
 data = os.path.join(root, "tests", "data")
 files = ["test128.mp3", "test192.mp3", "testmono.mp3",
          "testflac.flac", "testflacmono.flac", "testflac24.flac", "testflac8.flac"]
@@ -38,12 +39,16 @@ with tempfile.TemporaryDirectory() as tmp:
         if dur and dur * rate // 1000 < limit:
             limit = dur * rate // 1000
         raw = os.path.join(tmp, "o.raw")
-        subprocess.run([binary, "seek", path, "0", raw, str(limit)], check=True, capture_output=True)
-        pcm = np.fromfile(raw, dtype="<i2")
-        frames = len(pcm) // ch
-        crc = zlib.crc32(pcm.astype(">i2").tobytes()) & 0xFFFFFFFF
-        out.append(f"codec,{name},{frames},{ch},{rate},{crc:08X}")
-        print(f"  {name}: {frames} cuadros, {ch} canal(es), {rate} Hz, crc {crc:08X}")
+        for label, env in ((name, {}), (name + "+EQ", {"MP368K_EQ": EQ_BENCH})) if name == "test128.mp3" else ((name, {}),):
+            e = dict(os.environ)
+            e.pop("MP368K_EQ", None)
+            e.update(env)
+            subprocess.run([binary, "seek", path, "0", raw, str(limit)], check=True, capture_output=True, env=e)
+            pcm = np.fromfile(raw, dtype="<i2")
+            frames = len(pcm) // ch
+            crc = zlib.crc32(pcm.astype(">i2").tobytes()) & 0xFFFFFFFF
+            out.append(f"codec,{label},{frames},{ch},{rate},{crc:08X}")
+            print(f"  {label}: {frames} cuadros, {ch} canal(es), {rate} Hz, crc {crc:08X}")
 open(os.path.join(data, "REFERENCE_CODECS.txt"), "w").write("\n".join(out) + "\n")
 print("escrito tests/data/REFERENCE_CODECS.txt")
 EOF

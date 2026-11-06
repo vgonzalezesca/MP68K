@@ -130,9 +130,25 @@ Options (Audio Output: Automatic / 8-bit / 16-bit, Show Technical Info) · Windo
   `tools/set_bundle_bit.py` lo activa en el `.bin` (con su CRC), el `.dsk`, `.finf` y el AppleDouble, y lee de vuelta cada parche.
   Si aun así no se ve, probar reconstruir el escritorio (mantener ⌘ y Opción al arrancar) o copiar la app a un volumen nuevo.
 
-## Pendiente de la 6-G (sin implementar)
+## Ecualizador (6-G, fase 3: compilado y probado en el PC, sin ver en pantalla)
 
-- **Ventana del ecualizador (en-US, Platinum):** casilla **On**, deslizador vertical **Preamp** y 10 deslizadores
-  verticales rotulados `70 180 320 600 1K 3K 6K 12K 14K 16K`, en el mismo estilo de `ui_draw.c`. Sin presets. Se abre desde
-  el menú Window. Cuando el formato o el equipo no lo permiten, los controles se desactivan y un texto explica por qué
-  (ADR-011). Mantener la regla de la interfaz: redibujar solo lo que cambia.
+- **Ventana** Window ▸ Equalizer (⌘E), 330×206, textos en inglés de EE. UU.: casilla **On** (activada por omisión), cuatro presets
+  **Flat, Bass, Treble, Vocal**, deslizador **Preamp** y 10 deslizadores verticales **70, 180, 320, 600, 1K, 3K, 6K, 12K, 14K, 16K Hz**
+  con escala +12 / 0 / −12 dB. Pasos de 0,5 dB (±12 dB) y detente en 0 dB. Mientras se arrastra, el valor se lee arriba ("1 kHz  +3.5 dB").
+  El cuadro de cierre solo la oculta. **Los presets son propios, no los de Winamp**, y los valores están sujetos a oído (en pasos de 0,5 dB:
+  Bass 12,10,8,4,0…; Treble …0,2,4,8,10,12; Vocal −4,−2,0,4,8,8,4,0,−2,−4).
+- **Solo actúa sobre MP3.** Con un FLAC abierto los controles quedan atenuados y dice "The equalizer is not available for FLAC files."
+  (decisión de Víctor: en 68k, FLAC no tiene EQ; QuickTime tampoco).
+- **Cómo suena:** el EQ multiplica los coeficientes de frecuencia antes de la IMDCT (ADR-011), así que **no filtra el PCM**. Con el EQ apagado o
+  plano el PCM es idéntico bit a bit. Costo: hasta ~2 304 multiplicaciones por frame, **sin medir en el LC 580** (la fila "test128.mp3+EQ" de
+  `codecbench` lo mide).
+- **Latencia:** el anillo guarda 4 s para menús y arrastres, así que con la ventana abierta el motor solo deja ~600 ms de audio por delante
+  (`player_set_fill_target_ms`) y al cerrarla vuelve a 4 s. Lo que ya estaba en el anillo se oye antes: **hasta ~3 s después de abrir la ventana
+  un cambio no se oye todavía**. Menos colchón significa más riesgo de cortes mientras se ajusta.
+- **Límites conocidos:** a 44,1 kHz una línea de frecuencia mide ~38 Hz, así que 70, 180 y 320 Hz tienen poca resolución (error medido hasta
+  1,3 dB contra el modelo); los MP3 de 128 kbps suelen cortar sobre 16 kHz y esa banda casi no se nota; un preamp alto recorta. Los ajustes
+  **no se guardan** entre ejecuciones (no se pidió).
+- **Pruebas de PC (32 y 64 bits):** modelo de ganancia con error ≤ 2,2 % (0,19 dB); respuesta sobre ruido blanco codificado a 44,1/48/32 kHz y mono,
+  a 0,1–0,2 dB del modelo en medios y agudos; bloques cortos ejercitados con un archivo de transitorios; mismo resultado en 32 y 64 bits.
+  **Falta verla y oírla en Infinite Mac.**
+

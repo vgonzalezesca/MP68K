@@ -1,0 +1,33 @@
+--- a/layer3.c
++++ b/layer3.c
+@@ -44,9 +44,13 @@
+ # include "frame.h"
+ # include "huffman.h"
+ # include "layer3.h"
++# include "mp368k_eq.h"
+ 
+ /* --- Layer III ----------------------------------------------------------- */
+ 
++/* mp368k: gancho del ecualizador (NULL = no hace nada; ver mp368k_eq.h) */
++void (*mp368k_eq_hook)(mad_fixed_t [576], unsigned int, int) = 0;
++
+ enum {
+   count1table_select = 0x01,
+   scalefac_scale     = 0x02,
+@@ -2435,9 +2439,15 @@
+ 	if (channel->flags & mixed_block_flag)
+ 	  III_aliasreduce(xr[ch], 36);
+ # endif
++	if (mp368k_eq_hook)
++	  mp368k_eq_hook(xr[ch], header->samplerate,
++			 (channel->flags & mixed_block_flag) ? 2 : 1);
+       }
+-      else
++      else {
++	if (mp368k_eq_hook)
++	  mp368k_eq_hook(xr[ch], header->samplerate, 0);
+ 	III_aliasreduce(xr[ch], 576);
++      }
+ 
+       l = 0;
+ 

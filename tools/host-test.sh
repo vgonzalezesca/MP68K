@@ -45,4 +45,7 @@ done
 # --- etapa 6: capa de codecs (FLAC y MP3), en 64 y 32 bits ---
 echo "== capa de codecs (FLAC, MP3) en 64 y 32 bits"
 "$ROOT/tools/host-build-codecs.sh" && python3 -I "$ROOT/tests/host/check_codecs.py" "$ROOT" || rc=1
+echo "== ecualizador (unitaria y sobre audio real) en 64 y 32 bits"
+for b in 64 32; do "$B/test_eq$b" | grep -E 'FALLA|RESULTADO' || rc=1; done
+python3 -I "$ROOT/tests/host/check_eq.py" "$ROOT" || rc=1
 exit $rc

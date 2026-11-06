@@ -5,11 +5,14 @@
  *   test_codecs decode ARCHIVO SALIDA.raw [perfil 0-3] [arena_kb]
  *   test_codecs seek   ARCHIVO MS SALIDA.raw CUADROS [perfil]
  *
+ * La variable de entorno MP368K_EQ="b0,...,b9[,preamp]" (pasos de 0,5 dB) activa el ecualizador.
+ *
  * "info" imprime clave=valor (las etiquetas como bytes en hexadecimal, ya en MacRoman).
  * "decode" escribe todo el PCM como int16 little-endian y reporta uso del arena. "seek" abre,
  * busca a MS y escribe los primeros CUADROS cuadros. check_codecs.py compara con las referencias.
  */
 #include "codec.h"
+#include "eq.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -108,6 +111,26 @@ int main(int argc, char **argv)
 
     arena_mem = malloc((size_t)arena_kb * 1024);
     codec_init(arena_mem, (size_t)arena_kb * 1024);
+    {
+        const char *spec = getenv("MP368K_EQ");
+
+        if (spec != NULL && *spec) {
+            EqSettings es;
+            int v[EQ_BANDS + 1] = { 0 }, n = 0, i;
+            char *dup = strdup(spec), *tok = strtok(dup, ",");
+
+            while (tok != NULL && n < EQ_BANDS + 1) {
+                v[n++] = atoi(tok);
+                tok = strtok(NULL, ",");
+            }
+            free(dup);
+            es.enabled = 1;
+            for (i = 0; i < EQ_BANDS; i++)
+                es.band[i] = (int8_t)v[i];
+            es.preamp = (int8_t)v[EQ_BANDS];
+            eq_set(&es);
+        }
+    }
 
     if (open_file(argv[2], &hf, &io) != 0) {
         printf("error=nofile\n");
@@ -159,5 +182,13 @@ int main(int argc, char **argv)
     fclose(out);
     printf("frames=%lu\nend=%d\narena_peak=%lu\narena_size=%lu\n", frames, rc,
            (unsigned long)codec_arena()->peak, (unsigned long)codec_arena()->size);
+#ifdef MP368K_EQ_STATS
+    {
+        unsigned long b[3];
+
+        eq_stats(b);
+        printf("eq_blocks=%lu,%lu,%lu\n", b[0], b[1], b[2]);
+    }
+#endif
     return 0;
 }

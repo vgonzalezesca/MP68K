@@ -183,11 +183,40 @@ if(NOT DRFLAC_GEN_RESULT EQUAL 0)
     message(FATAL_ERROR "tools/prepare-dr-flac.sh fallo")
 endif()
 
+# libmad con el gancho del ecualizador (ADR-011): otra copia parcheada, sin tocar third_party/libmad/.
+# Con el gancho en NULL el PCM es idéntico al de la libmad original. decbench, decprofile y audiotest
+# siguen con la original.
+set(MAD_EQ_DIR ${CMAKE_BINARY_DIR}/libmad_eq)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+    ${CMAKE_SOURCE_DIR}/tools/prepare-libmad-eq.sh
+    ${CMAKE_SOURCE_DIR}/third_party/patches/libmad-0.15.1b-eq.patch
+    ${CMAKE_SOURCE_DIR}/third_party/patches/mp368k_eq.h)
+execute_process(
+    COMMAND ${CMAKE_SOURCE_DIR}/tools/prepare-libmad-eq.sh ${MAD_EQ_DIR}
+    RESULT_VARIABLE MAD_EQ_RESULT)
+if(NOT MAD_EQ_RESULT EQUAL 0)
+    message(FATAL_ERROR "tools/prepare-libmad-eq.sh fallo")
+endif()
+
+add_library(mad_eq STATIC
+    ${MAD_EQ_DIR}/bit.c ${MAD_EQ_DIR}/fixed.c ${MAD_EQ_DIR}/frame.c ${MAD_EQ_DIR}/huffman.c
+    ${MAD_EQ_DIR}/layer12.c ${MAD_EQ_DIR}/layer3.c ${MAD_EQ_DIR}/stream.c ${MAD_EQ_DIR}/synth.c
+    ${MAD_EQ_DIR}/timer.c ${MAD_EQ_DIR}/version.c)
+target_include_directories(mad_eq PRIVATE ${MAD_EQ_DIR})
+target_include_directories(mad_eq PUBLIC ${MAD_GEN_DIR})
+target_compile_definitions(mad_eq PRIVATE ${MAD_FPM} NDEBUG HAVE_LIMITS_H
+    SIZEOF_INT=4 SIZEOF_LONG=4 SIZEOF_LONG_LONG=8)
+target_compile_options(mad_eq PRIVATE -w)
+
+add_library(decoder_core_eq STATIC src/decoder_core.c)
+target_include_directories(decoder_core_eq PUBLIC src)
+target_link_libraries(decoder_core_eq PUBLIC mad_eq)
+
 add_library(codecs STATIC
     src/arena.c src/codec.c src/codec_mp3.c src/codec_flac.c src/vorbiscomment.c
-    src/id3.c src/mp3info.c src/dr_flac_impl.c)
+    src/id3.c src/mp3info.c src/eq.c src/dr_flac_impl.c)
 target_include_directories(codecs PUBLIC src ${DRFLAC_DIR})
-target_link_libraries(codecs PUBLIC decoder_core)
+target_link_libraries(codecs PUBLIC decoder_core_eq)
 set_source_files_properties(src/dr_flac_impl.c PROPERTIES COMPILE_OPTIONS -w)
 
 # --- Etapa 6: banco de los códecs (velocidad y CRC contra el PC, sin audio) ------
@@ -203,7 +232,7 @@ endif()
 if(mp368k IN_LIST MP368K_APPS)
     add_library(player_engine STATIC src/player/player.c src/order.c)
     target_include_directories(player_engine PUBLIC src/player)
-    target_link_libraries(player_engine PUBLIC codecs decoder_core mp368k_common)
+    target_link_libraries(player_engine PUBLIC codecs mp368k_common)
 
     add_application(mp368k
         src/player/app.c

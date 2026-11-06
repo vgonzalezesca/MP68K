@@ -55,9 +55,9 @@ los dos equipos desde el inicio y el asm optimiza el código ya definitivo. Nada
 
 | Fase | Estado |
 |---|---|
-| 0 — Cimientos: archivos de prueba, `segtest`, chequeo de float por software, tamaños de segmento | hecha; **falta que Víctor corra `segtest`** |
+| 0 — Cimientos: archivos de prueba, `segtest`, chequeo de float por software, tamaños de segmento | hecha; `segtest` corrió en Infinite Mac: OK |
 | 1 — Logo e ícono, ventana About | compilada; **falta que Víctor la vea y apruebe el diseño** |
-| 2 — Capa de códecs y FLAC | pendiente |
+| 2 — Capa de códecs y FLAC | compilada y probada en el PC (32 y 64 bits); **falta que Víctor la vea sonar y corra `codecbench`** |
 | 3 — Ecualizador del MP3 | pendiente |
 | 4 — Ogg Vorbis | pendiente |
 | 5 — WMA | pendiente |

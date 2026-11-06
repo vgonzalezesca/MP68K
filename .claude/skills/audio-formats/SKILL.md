@@ -5,7 +5,7 @@ description: Decodificación de FLAC, Ogg Vorbis y WMA, reproducción por QuickT
 
 # Formatos y ecualizador (etapa 6-G)
 
-**Nada de esto está implementado.** Las decisiones están en ADR-009, ADR-010 y ADR-011, y el pedido en `docs/ETAPA6.md`. Lo que
+**Hecho (compilado y probado en el PC, sin ver en un Mac): la capa de códecs y FLAC. Pendiente: Vorbis, WMA, QuickTime y el ecualizador.** Las decisiones están en ADR-009, ADR-010 y ADR-011, y el pedido en `docs/ETAPA6.md`. Lo que
 se dice de cada biblioteca hay que **confirmarlo leyendo su código y su licencia** antes de traerla a `third_party/`.
 
 ## Reglas al traer una biblioteca
@@ -16,9 +16,17 @@ se dice de cada biblioteca hay que **confirmarlo leyendo su código y su licenci
 - Mismo PCM en 68k, PPC y PC: comparar con CRC, como `decbench` contra `REFERENCE.txt`.
 - El código compartido va en `master`, y solo lo específico de un equipo, en `targets/`.
 
-## Capa de códecs
-Generalizar lo que hoy es `dec_stream_*` (`src/decoder_core.h`): abrir, siguiente bloque de PCM, buscar y cerrar, con los mismos
-`DecReadFn`/`DecSeekFn`. `player.c` deja de hablar con libmad directamente. El formato se detecta por contenido, no por la
+## Capa de códecs (hecha)
+`src/codec.h`: `CodecIO` (callbacks de lectura/posición + tamaño), `CodecInfo` (formato, tasa, canales, duración, etiquetas,
+`has_profiles`, `eq_capable`, `priv` para pasar estado de probe a open) y `Codec` (`sniff`, `probe`, `open`, `next`, `seek`,
+`close`). Los códecs entregan rebanadas de ≤ 1152 muestras por canal (`CODEC_MAX_FRAMES`) aunque su bloque nativo sea mayor.
+`codec_probe_any` reconoce por contenido (el MP3 va último: su reconocimiento es el más débil). La memoria de los códecs de
+terceros sale de un arena (`src/arena.c`) que reserva la app. **Para agregar un formato:** escribir `codec_<x>.c`, registrarlo
+en `src/codec.c` (`kCodecs` y las extensiones de `codec_name_matches`), agregarlo a `tools/host-build-codecs.sh` y a
+`tests/host/check_codecs.py`, y a `bench/codecbench.c` con su referencia en `tools/host-codec-ref.sh`.
+**Pruebas:** siempre en 32 y 64 bits (el 68k es de 32; dr_flac cambia de camino según el tamaño del puntero).
+**Cuidado con el float:** un `grep` de `float|double` no alcanza (se cortó en 30 líneas y se escapó la búsqueda de dr_flac);
+lo que vale es `targets/check-nosoftfloat.sh` sobre el binario enlazado. El formato se detecta por contenido, no por la
 extensión ni por el tipo de archivo: los archivos traídos de un PC no suelen traer tipo.
 
 ## Formatos

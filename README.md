@@ -75,3 +75,5 @@ Main documents (currently in Spanish): [`SPECS.md`](SPECS.md), [`docs/DECISIONS.
 Personal-use project. Because it includes libmad, the resulting binary is **GPL** (libmad is GPL v2 or later); copyright notices are kept in `third_party/libmad/`. *(A `LICENSE` file has yet to be added to the repository.)*
 
 No Apple ROMs or system images are included.
+<img width="808" height="604" alt="image" src="https://github.com/user-attachments/assets/7e7d1c2c-079b-46f1-ace9-142621bbaa5b" />
+

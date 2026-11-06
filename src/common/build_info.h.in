@@ -1,0 +1,8 @@
+/* Generado por CMake desde build_info.h.in: no editar. */
+#ifndef MP368K_BUILD_INFO_H
+#define MP368K_BUILD_INFO_H
+
+#define MP368K_BUILD_ID    "@MP368K_GIT_HASH@"
+#define MP368K_BUILD_FLAGS "@MP368K_FLAGS_STR@"
+
+#endif

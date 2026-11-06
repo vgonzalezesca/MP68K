@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//home/amd/Retro68/multiversal/**)",
+      "Bash(sed -n 485,520p make-multiverse.rb)",
+      "Bash(wc -l make-multiverse.rb generator.rb cincludes.rb)",
+      "Bash(grep -n '\"Devices\", \"Dialogs\"' -A10 *.rb)",
+      "Bash(chmod +x tools/*.sh)",
+      "Bash(bash -n tools/build-toolchain.sh)",
+      "Bash(bash -n tools/build.sh)",
+      "Bash(bash -n tools/check-nofpu.sh)",
+      "Bash(pacman -T cmake gmp mpfr libmpc boost bison flex texinfo ruby)",
+      "Bash(git init *)"
+    ]
+  }
+}

@@ -1,0 +1,23 @@
+dist/*
+!dist/.gitkeep
+build/
+*.o
+*.elf
+*.dsk
+*.bin
+*.APPL
+.rsrc/
+.finf/
+*.rsrc
+# ROMs e imágenes de sistema: nunca al repositorio
+*.rom
+*.ROM
+*.img
+Quadra*.rom
+# resultados locales
+bench_results*.txt
+.DS_Store
+# etapa 2: MP3 y PCM generados; solo se conserva la referencia de CRC
+tests/data/*
+!tests/data/REFERENCE.txt
+build-host/

@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(make:*)",
+      "Bash(cmake:*)",
+      "Bash(ninja:*)",
+      "Bash(ls:*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(m68k-apple-macos-objdump:*)",
+      "Bash(m68k-apple-macos-gcc:*)",
+      "Bash(m68k-apple-macos-as:*)",
+      "Bash(m68k-apple-macos-size:*)"
+    ],
+    "deny": [
+      "Read(./**/*.rom)",
+      "Read(./**/*.ROM)"
+    ]
+  }
+}

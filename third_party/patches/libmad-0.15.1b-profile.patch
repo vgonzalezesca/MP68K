@@ -1,0 +1,78 @@
+--- a/layer3.c
++++ b/layer3.c
+@@ -44,6 +44,7 @@
+ # include "frame.h"
+ # include "huffman.h"
+ # include "layer3.h"
++# include "mp368k_prof.h"
+ 
+ /* --- Layer III ----------------------------------------------------------- */
+ 
+@@ -2369,6 +2370,8 @@
+       sfreqi += 3;
+   }
+ 
++  MPPROF(PROF_SIDE);
++
+   /* scalefactors, Huffman decoding, requantization */
+ 
+   ngr = (header->flags & MAD_FLAG_LSF_EXT) ? 1 : 2;
+@@ -2399,8 +2402,10 @@
+ 	part2_length = III_scalefactors(ptr, channel, &si->gr[0].ch[ch],
+ 					gr == 0 ? 0 : si->scfsi[ch]);
+       }
++      MPPROF(PROF_SCALEF);
+ 
+       error = III_huffdecode(ptr, xr[ch], channel, sfbwidth[ch], part2_length);
++      MPPROF(PROF_HUFF);
+       if (error)
+ 	return error;
+     }
+@@ -2409,6 +2414,7 @@
+ 
+     if (header->mode == MAD_MODE_JOINT_STEREO && header->mode_extension) {
+       error = III_stereo(xr, granule, header, sfbwidth[0]);
++      MPPROF(PROF_STEREO);
+       if (error)
+ 	return error;
+     }
+@@ -2423,6 +2429,7 @@
+ 
+       if (channel->block_type == 2) {
+ 	III_reorder(xr[ch], channel, sfbwidth[ch]);
++	MPPROF(PROF_REORDER);
+ 
+ # if !defined(OPT_STRICT)
+ 	/*
+@@ -2435,9 +2442,13 @@
+ 	if (channel->flags & mixed_block_flag)
+ 	  III_aliasreduce(xr[ch], 36);
+ # endif
++	MPPROF(PROF_ALIAS);
+       }
+       else
+-	III_aliasreduce(xr[ch], 576);
++	{
++	  III_aliasreduce(xr[ch], 576);
++	  MPPROF(PROF_ALIAS);
++	}
+ 
+       l = 0;
+ 
+@@ -2503,6 +2514,7 @@
+ 	if (sb & 1)
+ 	  III_freqinver(sample, sb);
+       }
++      MPPROF(PROF_IMDCT);
+     }
+   }
+ 
+@@ -2524,6 +2536,8 @@
+   enum mad_error error;
+   int result = 0;
+ 
++  MPPROF_RESET();
++
+   /* allocate Layer III dynamic structures */
+ 
+   if (stream->main_data == 0) {

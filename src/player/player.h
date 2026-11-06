@@ -1,5 +1,5 @@
 /*
- * player — motor del reproductor: archivo -> decodificador en flujo -> audio.
+ * player — motor del reproductor: archivo -> códec (codec.h) -> audio.
  *
  * Un solo archivo abierto a la vez. Todo corre en el bucle principal: la aplicación
  * llama a player_idle() en cada vuelta del bucle de eventos (también dentro de sus
@@ -26,7 +26,8 @@ typedef enum {
     QUALITY_COUNT
 } PlayerQuality;
 
-#define PLAYER_ERR_NOT_MP3 TRACKINFO_ERR_NOT_MP3
+#define PLAYER_ERR_UNSUPPORTED TRACKINFO_ERR_UNSUPPORTED
+#define PLAYER_ERR_PARAMS      TRACKINFO_ERR_PARAMS
 #define PLAYER_ERR_NO_FILE (-4102)
 
 typedef struct {
@@ -36,6 +37,11 @@ typedef struct {
     char name[64];                  /* nombre del archivo */
     char title[64];                 /* título de la etiqueta ID3 (MacRoman), o el nombre sin extensión */
     char artist[64];                /* artista de la etiqueta ID3 (MacRoman); vacío si no hay */
+    char format[8];                 /* "MP3", "FLAC"... */
+    Boolean has_profiles;           /* admite FULL/HALF/MONO (solo MP3) */
+    Boolean eq_available;           /* el ecualizador actúa sobre este formato */
+    Boolean may_stutter;            /* la velocidad medida al empezar no alcanza para tiempo real (sin medir en el LC 580) */
+    unsigned bits_src;              /* bits por muestra del archivo (0 si no aplica) */
     Boolean vbr;                    /* la cabecera dice que es VBR: bitrate es el promedio */
     unsigned bitrate;               /* bps (primer frame en CBR; promedio en VBR) */
     unsigned in_rate, in_channels;  /* del archivo */
@@ -51,6 +57,7 @@ typedef struct {
     Boolean auto_degraded;          /* el modo automático bajó de perfil en esta pista */
     unsigned long preroll_rtf_x100; /* velocidad medida al elegir el perfil automático; 0 = no medida */
     unsigned long max_gap_ms;       /* mayor intervalo entre llamadas a player_idle() mientras suena (diagnóstico) */
+    unsigned long arena_peak;       /* mayor uso del arena de los códecs, en bytes (diagnóstico) */
 } PlayerStatus;
 
 OSErr player_init(void);

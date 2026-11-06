@@ -70,8 +70,9 @@ static void pstr_to_c(const unsigned char *p, char *out, size_t cap)
 static int add_entry(FSSpec *spec)
 {
     FileReader fr;
-    Id3Tags tg;
-    Mp3Info mi;
+    CodecIO io;
+    CodecInfo ci;
+    const Codec *codec;
     PlaylistEntry *e;
     char fname[64];
     OSErr err;
@@ -79,7 +80,7 @@ static int add_entry(FSSpec *spec)
 
     if (sCount >= PLAYLIST_MAX || fileread_open_spec(&fr, spec) != noErr)
         return -1;
-    err = trackinfo_probe(&fr, sProbe, sizeof sProbe, &tg, &mi);
+    err = trackinfo_probe(&fr, &io, sProbe, sizeof sProbe, &ci, &codec);
     fileread_close(&fr);
     if (err != noErr)
         return -1;
@@ -89,8 +90,8 @@ static int add_entry(FSSpec *spec)
     e = &sEntries[idx];
     e->spec = *spec;
     pstr_to_c(spec->name, fname, sizeof fname);
-    trackinfo_display_name(fname, &tg, e->label, sizeof e->label);
-    e->duration_ms = mi.duration_ms;
+    trackinfo_display_name(fname, &ci.tags, e->label, sizeof e->label);
+    e->duration_ms = ci.duration_ms;
     sCount = (unsigned)idx + 1;
     return idx;
 }
@@ -151,9 +152,13 @@ Boolean playlist_is_m3u(const unsigned char *pname)
     return ends_with(pname, ".m3u") || ends_with(pname, ".m3u8");
 }
 
-static Boolean looks_like_mp3(const unsigned char *pname, OSType type)
+/* ¿El nombre (cadena Pascal) o el tipo de archivo sugieren un formato que sabemos abrir? */
+static Boolean looks_like_audio(const unsigned char *pname, OSType type)
 {
-    return ends_with(pname, ".mp3") || type == 'MPG3' || type == 'MP3 ' || type == 'Mp3 ' || type == 'mp3!';
+    char cname[64];
+
+    pstr_to_c(pname, cname, sizeof cname);
+    return codec_name_matches(cname, (unsigned long)type) != 0;
 }
 
 unsigned playlist_add_folder_of(FSSpec *any_file, unsigned *skipped)
@@ -183,7 +188,7 @@ unsigned playlist_add_folder_of(FSSpec *any_file, unsigned *skipped)
             break;                                          /* fin de la carpeta */
         if (pb.hFileInfo.ioFlAttrib & 0x10)
             continue;                                       /* subcarpeta */
-        if (!looks_like_mp3(nm, pb.hFileInfo.ioFlFndrInfo.fdType) || nm[0] >= NAME_CAP)
+        if (!looks_like_audio(nm, pb.hFileInfo.ioFlFndrInfo.fdType) || nm[0] >= NAME_CAP)
             continue;
         memcpy(list[n], nm, (size_t)nm[0] + 1);
         n++;

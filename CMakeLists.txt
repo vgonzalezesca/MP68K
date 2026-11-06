@@ -170,11 +170,31 @@ if(audiotest IN_LIST MP368K_APPS)
     target_link_libraries(audiotest decoder_core mp368k_common)
 endif()
 
+# --- Etapa 6: capa de códecs (MP3, FLAC) ---------------------------------------
+# dr_flac (dominio público/MIT-0, third_party/dr_libs) se usa con una copia sin `double` que genera
+# tools/prepare-dr-flac.sh; el original no se modifica. Se compila sin avisos (código de terceros).
+set(DRFLAC_DIR ${CMAKE_BINARY_DIR}/drflac)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+    ${CMAKE_SOURCE_DIR}/tools/prepare-dr-flac.sh ${CMAKE_SOURCE_DIR}/third_party/dr_libs/dr_flac.h)
+execute_process(
+    COMMAND ${CMAKE_SOURCE_DIR}/tools/prepare-dr-flac.sh ${DRFLAC_DIR}
+    RESULT_VARIABLE DRFLAC_GEN_RESULT OUTPUT_QUIET)
+if(NOT DRFLAC_GEN_RESULT EQUAL 0)
+    message(FATAL_ERROR "tools/prepare-dr-flac.sh fallo")
+endif()
+
+add_library(codecs STATIC
+    src/arena.c src/codec.c src/codec_mp3.c src/codec_flac.c src/vorbiscomment.c
+    src/id3.c src/mp3info.c src/dr_flac_impl.c)
+target_include_directories(codecs PUBLIC src ${DRFLAC_DIR})
+target_link_libraries(codecs PUBLIC decoder_core)
+set_source_files_properties(src/dr_flac_impl.c PROPERTIES COMPILE_OPTIONS -w)
+
 # --- Etapa 5b: el reproductor ---------------------------------------------------
 if(mp368k IN_LIST MP368K_APPS)
-    add_library(player_engine STATIC src/player/player.c src/id3.c src/mp3info.c src/order.c)
+    add_library(player_engine STATIC src/player/player.c src/order.c)
     target_include_directories(player_engine PUBLIC src/player)
-    target_link_libraries(player_engine PUBLIC decoder_core mp368k_common)
+    target_link_libraries(player_engine PUBLIC codecs decoder_core mp368k_common)
 
     add_application(mp368k
         src/player/app.c

@@ -41,4 +41,8 @@ for spec in "test128:none:" "testmono:none:" "testinfo:info:" "testvbr:toc:" "te
     echo "== $f.mp3"
     "$B/test_files" "$ROOT/tests/data/$f.mp3" "$(dur_ms "$ROOT/tests/data/$f.mp3")" "$hdr" $tags || rc=1
 done
+
+# --- etapa 6: capa de codecs (FLAC y MP3), en 64 y 32 bits ---
+echo "== capa de codecs (FLAC, MP3) en 64 y 32 bits"
+"$ROOT/tools/host-build-codecs.sh" && python3 -I "$ROOT/tests/host/check_codecs.py" "$ROOT" || rc=1
 exit $rc

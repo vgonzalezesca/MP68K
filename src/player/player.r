@@ -101,7 +101,7 @@ resource 'DITL' (129) {
 };
 
 /*
- * Partition: 1.5 MB preferred, 1 MB minimum. canBackground keeps decoding (and playing)
+ * Partition: 2 MB preferred, 1.5 MB minimum (audio ring, codec arena and read buffer). canBackground keeps decoding (and playing)
  * while another application is in front.
  */
 resource 'SIZE' (-1) {
@@ -121,8 +121,8 @@ resource 'SIZE' (-1) {
 	reserved,
 	reserved,
 	reserved,
-	1536 * 1024,
-	1024 * 1024
+	2048 * 1024,
+	1536 * 1024
 };
 
 /*

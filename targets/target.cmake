@@ -14,6 +14,12 @@ set(MP368K_ASM_KERNEL_SOURCES targets/asm/synth_window_040.s targets/asm/dct32_0
 set(MP368K_ASM_KERNEL_DEFS MP368K_SYNTH_WINDOW=mp368k_synth_window_full_040 MP368K_DCT32=mp368k_dct32_040
     MP368K_IMDCT_L=mp368k_imdct_l_040)
 
+# Conversiones de PCM: la de la salida de la síntesis se elige por pila (solo la pila asm); las de 8 bits y ganancia,
+# que usa la salida de audio, van en mp368k_common.
+set(MP368K_ASM_COMMON_SOURCES targets/asm/pcm_040.s)
+set(MP368K_ASM_COMMON_DEFS MP368K_PCM_U8=mp368k_pcm_u8_040 MP368K_PCM_GAIN16=mp368k_pcm_gain16_040)
+set(MP368K_ASM_CORE_DEFS MP368K_PCM_SCALE16=mp368k_pcm_scale16_040)
+
 function(mp368k_target_apps)
     # Regla 6: comprobar que un segmento de código de más de 100 KB corre (targets/segtest.c).
     set(SEGTEST_DIR ${CMAKE_BINARY_DIR}/segtest)

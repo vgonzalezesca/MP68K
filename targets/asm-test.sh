@@ -28,10 +28,10 @@ LD=$BIN/m68k-apple-macos-ld.real
 LIBGCC=$("$GCC" -m68040 -msoft-float -print-libgcc-file-name)
 
 # prueba : fuentes C de la referencia : fuentes asm del kernel
-declare -A REF=( [synth_window]="src/synth_ref.c" [dct32]="src/dct32_ref.c" [imdct_l]="src/imdct_ref.c" )
-declare -A ASM=( [synth_window]="targets/asm/synth_window_040.s" [dct32]="targets/asm/dct32_040.s" [imdct_l]="targets/asm/imdct_l_040.s" )
+declare -A REF=( [synth_window]="src/synth_ref.c" [dct32]="src/dct32_ref.c" [imdct_l]="src/imdct_ref.c" [pcm]="src/pcm_ref.c" )
+declare -A ASM=( [synth_window]="targets/asm/synth_window_040.s" [dct32]="targets/asm/dct32_040.s" [imdct_l]="targets/asm/imdct_l_040.s" [pcm]="targets/asm/pcm_040.s" )
 TESTS=("$@")
-[[ ${#TESTS[@]} -gt 0 ]] || TESTS=(synth_window dct32 imdct_l mp3_e2e)
+[[ ${#TESTS[@]} -gt 0 ]] || TESTS=(synth_window dct32 imdct_l pcm mp3_e2e)
 
 "$AS" -m68040 "$ROOT/tests/asm/start.s" -o "$OUT/start.o"
 "$AS" -m68040 "$ROOT/tests/asm/shim.s" -o "$OUT/shim.o"

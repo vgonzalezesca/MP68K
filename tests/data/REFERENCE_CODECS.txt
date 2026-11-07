@@ -11,3 +11,5 @@ codec,testflac24.flac,529200,2,44100,8D9595A7
 codec,testflac8.flac,264600,2,22050,7DCFB803
 codec,testvorbis.ogg,529200,2,44100,924FDF93
 codec,testvorbismono.ogg,529200,1,44100,15E734EA
+codec,testwma2.wma,529200,2,44100,FDA71AF8
+codec,testwma1.wma,529200,2,44100,70E68D7E

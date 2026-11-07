@@ -83,5 +83,6 @@ int codec_name_matches(const char *name, unsigned long mac_type);
 extern const Codec codec_mp3;
 extern const Codec codec_flac;
 extern const Codec codec_vorbis;
+extern const Codec codec_wma;
 
 #endif

@@ -6,7 +6,7 @@
 #include <string.h>
 
 /* El MP3 va al final: su reconocimiento es el más débil (acepta casi cualquier cosa). */
-static const Codec *const kCodecs[] = { &codec_flac, &codec_vorbis, &codec_mp3 };
+static const Codec *const kCodecs[] = { &codec_flac, &codec_vorbis, &codec_wma, &codec_mp3 };
 #define CODEC_COUNT (sizeof kCodecs / sizeof kCodecs[0])
 
 static Arena sArena;
@@ -93,7 +93,7 @@ static int ends_with_ci(const char *s, const char *suffix)
 
 int codec_name_matches(const char *name, unsigned long mac_type)
 {
-    static const char *const kExt[] = { ".mp3", ".flac", ".ogg", ".oga" };
+    static const char *const kExt[] = { ".mp3", ".flac", ".ogg", ".oga", ".wma" };
     static const unsigned long kTypes[] = {
         0x4D504733UL /* MPG3 */, 0x4D503320UL /* MP3  */, 0x4D703320UL /* Mp3  */, 0x6D703321UL /* mp3! */,
         0x464C4143UL /* FLAC */, 0x664C6143UL /* fLaC */, 0x4F676753UL /* OggS */, 0x4F676756UL /* OggV */

@@ -234,6 +234,27 @@ target_include_directories(tremor PRIVATE ${TREMOR_DIR})
 target_compile_definitions(tremor PRIVATE MP368K_TREMOR)
 target_compile_options(tremor PRIVATE -w -fwrapv)      # código de terceros: sin avisos; la envoltura de enteros es la esperada
 
+# libwma (Rockbox) con el float reemplazado por enteros y cabeceras de reemplazo (ADR-009): otra copia parcheada.
+set(WMA_DIR ${CMAKE_BINARY_DIR}/libwma)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+    ${CMAKE_SOURCE_DIR}/tools/prepare-libwma.sh
+    ${CMAKE_SOURCE_DIR}/third_party/patches/libwma-mp368k.patch
+    ${CMAKE_SOURCE_DIR}/third_party/patches/libwma_shim/codecs.h
+    ${CMAKE_SOURCE_DIR}/third_party/patches/libwma_shim/platform.h
+    ${CMAKE_SOURCE_DIR}/third_party/patches/libwma_shim/codecs/lib/codeclib.h)
+execute_process(
+    COMMAND ${CMAKE_SOURCE_DIR}/tools/prepare-libwma.sh ${WMA_DIR}
+    RESULT_VARIABLE WMA_RESULT)
+if(NOT WMA_RESULT EQUAL 0)
+    message(FATAL_ERROR "tools/prepare-libwma.sh fallo")
+endif()
+add_library(wma STATIC
+    ${WMA_DIR}/wmadeci.c ${WMA_DIR}/wmafixed.c ${WMA_DIR}/ffmpeg_bitstream.c ${WMA_DIR}/mdct.c
+    ${WMA_DIR}/mdct_lookup.c ${WMA_DIR}/fft-ffmpeg.c)
+target_include_directories(wma PRIVATE ${WMA_DIR} ${WMA_DIR}/codecs/lib)
+target_compile_definitions(wma PRIVATE ROCKBOX)
+target_compile_options(wma PRIVATE -w -fwrapv)          # código de terceros: sin avisos; la envoltura de enteros es la esperada
+
 # Núcleos de la síntesis del MP3 (ADR-014): por omisión, la libmad original en C. Si el equipo trae asm
 # (MP368K_ASM_KERNEL_SOURCES y MP368K_ASM_KERNEL_DEFS, definidos en targets/target.cmake), la pila principal los
 # usa y se arma además una pila "_ref" con la libmad original para comparar las dos en el mismo equipo
@@ -259,11 +280,12 @@ function(mp368k_codec_stack SFX KERNEL_LABEL)
     target_link_libraries(decoder_core_eq${SFX} PUBLIC mad_eq${SFX} mp368k_common)
 
     add_library(codecs${SFX} STATIC
-        src/arena.c src/heap.c src/codec.c src/codec_mp3.c src/codec_flac.c src/codec_vorbis.c src/vorbiscomment.c
+        src/arena.c src/heap.c src/codec.c src/codec_mp3.c src/codec_flac.c src/codec_vorbis.c src/codec_wma.c src/asfparse.c
+        src/vorbiscomment.c
         src/id3.c src/mp3info.c src/eq.c src/dr_flac_impl.c)
     target_include_directories(codecs${SFX} PUBLIC src ${DRFLAC_DIR})
     target_compile_definitions(codecs${SFX} PUBLIC MP368K_SYNTH_KERNEL_LABEL="${KERNEL_LABEL}")
-    target_link_libraries(codecs${SFX} PUBLIC decoder_core_eq${SFX} tremor)
+    target_link_libraries(codecs${SFX} PUBLIC decoder_core_eq${SFX} tremor wma)
 endfunction()
 
 if(MP368K_ASM AND MP368K_ASM_KERNEL_SOURCES)
@@ -276,6 +298,7 @@ else()
 endif()
 set_source_files_properties(src/dr_flac_impl.c PROPERTIES COMPILE_OPTIONS -w)
 set_source_files_properties(src/codec_vorbis.c PROPERTIES COMPILE_OPTIONS "-I${TREMOR_DIR};-DMP368K_TREMOR")
+set_source_files_properties(src/codec_wma.c PROPERTIES COMPILE_OPTIONS "-I${WMA_DIR};-I${WMA_DIR}/codecs/lib;-DROCKBOX")
 
 # --- Etapa 6: banco de los códecs (velocidad y CRC contra el PC, sin audio) ------
 if(codecbench IN_LIST MP368K_APPS)

@@ -48,6 +48,7 @@ static const char *const kFiles[] = {
     "test128.mp3", "test192.mp3", "testmono.mp3",
     "testflac.flac", "testflacmono.flac", "testflac24.flac", "testflac8.flac",
     "testvorbis.ogg", "testvorbismono.ogg",
+    "testwma2.wma", "testwma1.wma",
 };
 #define NFILES (sizeof kFiles / sizeof kFiles[0])
 

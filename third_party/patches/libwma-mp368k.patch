@@ -1,0 +1,72 @@
+--- a/wmadeci.c
++++ b/wmadeci.c
+@@ -588,12 +588,35 @@
+    expense (linear interpolation approximately doubles the number of
+    bits of precision). */
+ /* x^(-1/4) in 16.16, for x given with frac_bits fractional bits */
++
++/* mp368k: bits de (float)x para 0 < x < 2^31, con el redondeo al par más cercano de IEEE 754. Reemplaza al
++   "u.f = (float)(fixed32)x" original: el 68LC040 no tiene FPU y un float aquí cuesta llamadas a libgcc en cada bloque. */
++static inline unsigned int mp368k_int_to_float_bits(unsigned int x)
++{
++    unsigned int e = 31, m;
++
++    while (!(x >> e))
++        e--;                                    /* posición del bit más alto */
++    if (e <= 23) {
++        m = (x << (23 - e)) & 0x7FFFFF;
++    } else {
++        unsigned int sh = e - 23, low = x & ((1u << sh) - 1), half = 1u << (sh - 1);
++
++        m = x >> sh;                            /* 24 bits con el bit implícito */
++        if (low > half || (low == half && (m & 1)))
++            m++;
++        if (m >> 24) {                          /* el redondeo llegó a 2^24: sube el exponente */
++            m >>= 1;
++            e++;
++        }
++        m &= 0x7FFFFF;
++    }
++    return ((e + 127) << 23) | m;
++}
++
+ static inline fixed32 pow_m1_4(WMADecodeContext *s, fixed64 x, int frac_bits)
+ {
+-    union {
+-        float f;
+-        unsigned int v;
+-    } u, t;
++    unsigned int u, t;
+     unsigned int e, m;
+     fixed32 a, b;
+     int shift = 0;
+@@ -605,13 +628,13 @@
+         x >>= 1;
+         shift++;
+     }
+-    u.f = (float)(fixed32)x;
++    u = x != 0 ? mp368k_int_to_float_bits((unsigned int)(fixed32)x) : 0;
+     if (x != 0)
+-        u.v += (shift - frac_bits) << 23;
+-    e = u.v >> 23;
+-    m = (u.v >> (23 - LSP_POW_BITS)) & ((1 << LSP_POW_BITS) - 1);
+-    /* build interpolation scale: 1 <= t < 2. */
+-    t.v = ((u.v << LSP_POW_BITS) & ((1 << 23) - 1)) | (127 << 23);
++        u += (shift - frac_bits) << 23;
++    e = u >> 23;
++    m = (u >> (23 - LSP_POW_BITS)) & ((1 << LSP_POW_BITS) - 1);
++    /* build interpolation scale: 1 <= t < 2, como bits de un float */
++    t = ((u << LSP_POW_BITS) & ((1 << 23) - 1)) | (127 << 23);
+     a = ((fixed32*)s->lsp_pow_m_table1)[m];
+     b = ((fixed32*)s->lsp_pow_m_table2)[m];
+ 
+@@ -619,7 +642,8 @@
+     /* TODO:  Since we're unlikely have value that cover the whole
+      * IEEE754 range, we probably don't need to have all possible exponents */
+ 
+-    return (lsp_pow_e_table[e] * (a + fixmul32(b, ftofix32(t.f))) >>32);
++    /* ftofix32(t) = (int)(t * 65536 + 0.5) para 1 <= t < 2, en enteros: t = 1 + mantisa / 2^23 */
++    return (lsp_pow_e_table[e] * (a + fixmul32(b, (fixed32)(65536 + (((t & 0x7FFFFF) + 64) >> 7)))) >>32);
+ }
+ 
+ static void wma_lsp_to_curve_init(WMADecodeContext *s, int frame_len)

@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""Pruebas de la capa de códecs en el PC (FLAC, Ogg Vorbis, y MP3 a través de la capa nueva).
+"""Pruebas de la capa de códecs en el PC (FLAC, Ogg Vorbis, WMA, y MP3 a través de la capa nueva).
 
 Uso: check_codecs.py <raíz del proyecto>
 
 Compara test_codecs (los mismos fuentes que la app Mac, en 64 y en 32 bits) contra referencias
-independientes: `flac -d` para el PCM de FLAC, `ffmpeg` para Ogg Vorbis (Tremor es entero: se admite 1 LSB), y los .raw
+independientes: `flac -d` para el PCM de FLAC, `ffmpeg` para Ogg Vorbis y WMA (decodificadores enteros: se admite 1 LSB), y los .raw
 de hostdec para el MP3. Comprueba además
 etiquetas con acentos, duración, búsqueda (con y sin SEEKTABLE), y robustez: archivos truncados,
 corruptos, basura, ID3v2 delante, una carátula enorme, canales o tasa no admitidos y arena chico.
@@ -211,6 +211,135 @@ def main():
             rc, kv = run(binary, "info", v6)
             check(f"[{bits}] Vorbis de 6 canales: rechazado con CODEC_ERR_PARAMS (-3)", kv.get("error") == "-3", str(kv))
             rc, kv = run(binary, "decode", vpath, os.path.join(tmp, "o.raw"), 0, 16)
+            check(f"[{bits}] arena de 16 KB: error de memoria limpio (open:-4)", kv.get("error") == "open:-4", str(kv))
+
+        print("== WMA (libwma): información")
+        for bits, binary in BINS.items():
+            rc, kv = run(binary, "info", os.path.join(DATA, "testwma2.wma"))
+            check(f"[{bits}] WMA v2: formato, tasa y canales",
+                  kv.get("format") == "WMA" and kv.get("rate") == "44100" and kv.get("channels") == "2", str(kv))
+            check(f"[{bits}] WMA v2: duración de la cabecera (59 999 ms)", abs(int(kv.get("duration_ms", "0")) - 59999) <= 5, kv.get("duration_ms", ""))
+            check(f"[{bits}] WMA v2: título, artista y álbum con acentos en MacRoman",
+                  (kv.get("title"), kv.get("artist"), kv.get("album")) == (want_title, want_artist, want_album), str(kv))
+            check(f"[{bits}] WMA: sin perfiles ni ecualizador", kv.get("profiles") == "0" and kv.get("eq") == "0")
+            rc, kv = run(binary, "info", os.path.join(DATA, "testwma1.wma"))
+            check(f"[{bits}] WMA v1: reconocido", kv.get("format") == "WMA" and kv.get("channels") == "2", str(kv))
+
+        print("== WMA: PCM contra ffmpeg (decodificadores enteros: se admite 1 LSB) y 32 == 64 bits")
+        wsrc = os.path.join(DATA, "mix.wav")
+        variants = [("testwma2.wma", os.path.join(DATA, "testwma2.wma"), False), ("testwma1.wma", os.path.join(DATA, "testwma1.wma"), False)]
+        for label, args in (("mono 22,05 kHz v2 64k", ["-ac", "1", "-ar", "22050", "-b:a", "64k"]),
+                            ("estéreo 48 kHz v2 192k", ["-ar", "48000", "-b:a", "192k"]),
+                            ("mono 16 kHz v2 32k", ["-ac", "1", "-ar", "16000", "-b:a", "32k"]),
+                            ("estéreo 32 kHz v1 96k (exponentes LSP)", ["-ar", "32000", "-b:a", "96k", "-c:a", "wmav1"])):
+            vp = os.path.join(tmp, "wv_" + str(abs(hash(label))) + ".wma")
+            cmd = ["ffmpeg", "-v", "error", "-y", "-t", "12", "-i", wsrc, "-c:a", "wmav2"] + args + [vp]
+            subprocess.run(cmd, check=True)
+            # Con exponentes LSP (WMA v1 a baja tasa) libwma usa tablas de poca precisión: la forma de onda coincide (correlación
+            # 1,0000) pero la amplitud sale ~0,2 dB baja. Se comprobó una vez que la libwma ORIGINAL (con float) da exactamente los
+            # mismos bytes que la copia con enteros: la diferencia es de la biblioteca, no del parche. Aquí se exige SNR >= 25 dB.
+            variants.append((label, vp, "LSP" in label))
+        for label, path, lenient in variants:
+            refraw = os.path.join(tmp, "wref.raw")
+            ri = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "stream=channels", "-of", "csv=p=0", path],
+                                capture_output=True, text=True).stdout.split()[0]
+            subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", path, "-f", "s16le", "-acodec", "pcm_s16le", refraw], check=True)
+            ref = np.fromfile(refraw, dtype="<i2").astype(np.int64)
+            outs = {}
+            for bits, binary in BINS.items():
+                out = os.path.join(tmp, f"w{bits}.raw")
+                rc, kv = run(binary, "decode", path, out)
+                outs[bits] = np.fromfile(out, dtype="<i2")
+                got = outs[bits].astype(np.int64)
+                n = min(len(got), len(ref))
+                d = np.abs(got[:n] - ref[:n]) if n else np.array([99999])
+                rms_d = float(np.sqrt(np.mean(d * d)))
+                snr = 20 * np.log10(float(np.sqrt(np.mean(ref[:n] * ref[:n]))) / max(rms_d, 1e-9)) if n else 0.0
+                accurate = (snr >= 25.0) if lenient else (int(d.max()) <= 2 and rms_d < 1.0)
+                ok = rc == 0 and n > 0 and len(got) <= len(ref) and len(ref) - len(got) <= 8192 * int(ri) and accurate
+                check(f"[{bits}] {label}: {len(got) // int(ri)} cuadros, error máx {int(d.max())} LSB, rms {rms_d:.2f}, SNR {snr:.1f} dB", ok, str(kv))
+            check(f"{label}: mismos bytes en 32 y 64 bits", np.array_equal(outs["32"], outs["64"]))
+
+        print("== WMA: búsqueda (contenido idéntico a la decodificación completa; posición con error < 2 ms)")
+        wpath = os.path.join(DATA, "testwma2.wma")
+        for bits, binary in BINS.items():
+            full = os.path.join(tmp, "wfull.raw")
+            run(binary, "decode", wpath, full)
+            ref = np.fromfile(full, dtype="<i2").astype(np.int64)
+            good, worst_lag, worst = True, 0, 0
+            for ms in (0, 1000, 15007, 30014, 45021, 58000):
+                out = os.path.join(tmp, "wseek.raw")
+                rc, kv = run(binary, "seek", wpath, ms, out, 16000)
+                frame = ms * 44100 // 1000
+                got = np.fromfile(out, dtype="<i2").astype(np.int64)
+                if rc != 0 or len(got) != 32000:
+                    good = False
+                    print(f"      ms={ms}: rc={rc} {len(got)} muestras {kv}")
+                    continue
+                if ms == 0:
+                    exact = np.array_equal(got, ref[:32000])           # igual que empezar a reproducir desde el principio
+                    good = good and exact
+                    worst = max(worst, 0 if exact else 99999)
+                    continue
+                # el contenido tras los 2 primeros cuadros de MDCT debe estar en la decodificación completa, a menos de 2 ms (88 cuadros)
+                seg = got[8000 * 2:16000 * 2]
+                best = None
+                for lag in range(-90, 91):
+                    s0 = (frame + 8000 + lag) * 2
+                    d = int(np.abs(seg - ref[s0:s0 + len(seg)]).max())
+                    if best is None or d < best[0]:
+                        best = (d, lag)
+                worst = max(worst, best[0])
+                worst_lag = max(worst_lag, abs(best[1]))
+            check(f"[{bits}] búsqueda: 6 posiciones, diferencia máxima {worst} LSB, desfase máximo {worst_lag} cuadros ({worst_lag / 44.1:.1f} ms)",
+                  good and worst <= 2 and worst_lag < 90)
+
+        print("== WMA: robustez (no deben colgarse ni caerse)")
+        wma = open(wpath, "rb").read()
+        rng = random.Random(370)
+        wcases = {}
+        wcases["truncado al 30 %"] = wma[: len(wma) * 3 // 10]
+        wcases["truncado a 100 bytes"] = wma[:100]
+        wcases["truncado dentro de la cabecera"] = wma[:600]
+        corrupt = bytearray(wma)
+        for _ in range(300):
+            corrupt[rng.randrange(1500, len(corrupt))] ^= 0xFF
+        wcases["300 bytes dañados"] = bytes(corrupt)
+        corrupt = bytearray(wma)
+        for _ in range(30):
+            corrupt[rng.randrange(0, 700)] ^= 0xFF
+        wcases["30 bytes dañados en la cabecera"] = bytes(corrupt)
+        wcases["basura aleatoria"] = bytes(rng.randrange(256) for _ in range(50000))
+        wcases["solo el GUID de cabecera"] = bytes.fromhex("3026b2758e66cf11a6d900aa0062ce6c")
+        for label, blob in wcases.items():
+            path = os.path.join(tmp, "wcase.bin")
+            open(path, "wb").write(blob)
+            for bits, binary in BINS.items():
+                try:
+                    rc, kv = run(binary, "decode", path, os.path.join(tmp, "o.raw"), timeout=60)
+                    ok = 0 <= rc < 100
+                except subprocess.TimeoutExpired:
+                    ok, rc = False, "TIMEOUT"
+                check(f"[{bits}] {label}", ok, f"rc={rc}")
+
+        print("== WMA: límites declarados")
+        sp = bytes.fromhex("9107dcb7b7a9cf118ee600c00c205365")
+        pos = wma.find(sp) + 24 + 54          # inicio del WAVEFORMATEX del primer flujo de audio
+        def patched(offset, data):
+            b = bytearray(wma)
+            b[pos + offset:pos + offset + len(data)] = data
+            return bytes(b)
+        limit_cases = {"WMA Pro (0x162)": (patched(0, struct.pack("<H", 0x162)), "-2"),
+                       "96 kHz": (patched(4, struct.pack("<I", 96000)), "-3"),
+                       "6 canales": (patched(2, struct.pack("<H", 6)), "-3")}
+        for label, (blob, want) in limit_cases.items():
+            path = os.path.join(tmp, "wlim.wma")
+            open(path, "wb").write(blob)
+            for bits, binary in BINS.items():
+                rc, kv = run(binary, "info", path)
+                check(f"[{bits}] WMA {label}: rechazado con error {want}", kv.get("error") == want, str(kv))
+        for bits, binary in BINS.items():
+            rc, kv = run(binary, "decode", wpath, os.path.join(tmp, "o.raw"), 0, 16)
             check(f"[{bits}] arena de 16 KB: error de memoria limpio (open:-4)", kv.get("error") == "open:-4", str(kv))
 
         print("== MP3 por la capa nueva: mismo PCM que hostdec")

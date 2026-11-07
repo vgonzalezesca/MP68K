@@ -1,0 +1,16 @@
+libwma: decodificador WMA v1/v2 en punto fijo de Rockbox (derivado del decodificador WMA de FFmpeg), con las piezas de su
+"codeclib" que necesita (bits y VLC de FFmpeg, MDCT, FFT) y el lector de paquetes ASF de Rockbox.
+
+Origen:   https://github.com/Rockbox/rockbox (espejo de git.rockbox.org), commit a13aaaf5f1c3775beb35a902b3a930ff9dc84204, directorios
+          lib/rbcodec/codecs/libwma, lib/rbcodec/codecs/lib y lib/rbcodec/codecs/libasf.
+Traído:   2026-11-07. rockbox_wma_codec.c.txt es lib/rbcodec/codecs/wma.c, solo como referencia de uso (no se compila).
+Licencia, por archivo (cada uno conserva su aviso original, que NO se modifica; los cambios de MP368K están en
+          third_party/patches/libwma-mp368k.patch y en third_party/patches/libwma_shim/, y se aplican a una copia con
+          tools/prepare-libwma.sh). Verificado leyendo los avisos de cada archivo:
+          - GNU Lesser General Public License, versión 2 o 2.1 "o posterior": wmadeci.c, wmadec.h, ffmpeg_bitstream.c,
+            ffmpeg_get_bits.h, mdct.c, fft-ffmpeg.c (Copyright de The FFmpeg Project y otros).
+          - GNU General Public License, versión 2 "o posterior": wmafixed.c/h (Michael Giacomelli), asf.c (Dave Chapman, no se
+            compila: el lector de paquetes de MP368K es src/asfparse.c), mdct_lookup.c y los .h de ensamblador de otras CPU.
+          Todo es "o posterior": compatible con la GPLv3 de este proyecto. Los .h de ARM y ColdFire no se usan en el 68k (se
+          conservan porque los archivos de arriba los incluyen).
+Lo que NO se soporta: WMA Pro (0x162), WMA Voice, Lossless ni DRM (el decodificador lo rechaza y la app lo informa).

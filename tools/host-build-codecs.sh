@@ -16,7 +16,11 @@ mkdir -p "$B/cod"
 "$ROOT/tools/prepare-libmad-eq.sh" "$MAD"
 
 LIB=(bit fixed frame huffman layer12 layer3 stream synth timer version)
-OURS=(src/decoder_core.c src/eq.c src/arena.c src/codec.c src/codec_mp3.c src/codec_flac.c src/vorbiscomment.c
+# MP368K_SYNTH_KERNEL=off compila la síntesis original de libmad (para comparar contra el núcleo de referencia).
+SYNTH_DEF=(-DMP368K_SYNTH_WINDOW=mp368k_synth_window_full_ref)
+SYNTH_SRC=(src/synth_ref.c)
+if [[ ${MP368K_SYNTH_KERNEL:-on} == off ]]; then SYNTH_DEF=(); SYNTH_SRC=(); fi
+OURS=(src/decoder_core.c src/eq.c "${SYNTH_SRC[@]}" src/arena.c src/codec.c src/codec_mp3.c src/codec_flac.c src/vorbiscomment.c
       src/id3.c src/mp3info.c tests/host/test_codecs.c)
 
 build() {
@@ -28,7 +32,7 @@ build() {
                   -DNDEBUG -DHAVE_LIMITS_H -DSIZEOF_INT=4 -DSIZEOF_LONG="$sizeof_long" -DSIZEOF_LONG_LONG=8)
     local objs=()
     for f in "${LIB[@]}"; do
-        gcc "${common[@]}" -DFPM_64BIT -w -c "$MAD/$f.c" -o "$d/mad_$f.o"; objs+=("$d/mad_$f.o")
+        gcc "${common[@]}" -DFPM_64BIT "${SYNTH_DEF[@]}" -w -c "$MAD/$f.c" -o "$d/mad_$f.o"; objs+=("$d/mad_$f.o")
     done
     gcc "${common[@]}" -w -c "$ROOT/src/dr_flac_impl.c" -o "$d/dr_flac_impl.o"; objs+=("$d/dr_flac_impl.o")
     for f in "${OURS[@]}"; do

@@ -190,6 +190,7 @@ set(MAD_EQ_DIR ${CMAKE_BINARY_DIR}/libmad_eq)
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
     ${CMAKE_SOURCE_DIR}/tools/prepare-libmad-eq.sh
     ${CMAKE_SOURCE_DIR}/third_party/patches/libmad-0.15.1b-eq.patch
+    ${CMAKE_SOURCE_DIR}/third_party/patches/libmad-0.15.1b-synth.patch
     ${CMAKE_SOURCE_DIR}/third_party/patches/mp368k_eq.h)
 execute_process(
     COMMAND ${CMAKE_SOURCE_DIR}/tools/prepare-libmad-eq.sh ${MAD_EQ_DIR}
@@ -198,25 +199,44 @@ if(NOT MAD_EQ_RESULT EQUAL 0)
     message(FATAL_ERROR "tools/prepare-libmad-eq.sh fallo")
 endif()
 
-add_library(mad_eq STATIC
-    ${MAD_EQ_DIR}/bit.c ${MAD_EQ_DIR}/fixed.c ${MAD_EQ_DIR}/frame.c ${MAD_EQ_DIR}/huffman.c
-    ${MAD_EQ_DIR}/layer12.c ${MAD_EQ_DIR}/layer3.c ${MAD_EQ_DIR}/stream.c ${MAD_EQ_DIR}/synth.c
-    ${MAD_EQ_DIR}/timer.c ${MAD_EQ_DIR}/version.c)
-target_include_directories(mad_eq PRIVATE ${MAD_EQ_DIR})
-target_include_directories(mad_eq PUBLIC ${MAD_GEN_DIR})
-target_compile_definitions(mad_eq PRIVATE ${MAD_FPM} NDEBUG HAVE_LIMITS_H
-    SIZEOF_INT=4 SIZEOF_LONG=4 SIZEOF_LONG_LONG=8)
-target_compile_options(mad_eq PRIVATE -w)
+# Núcleo de la ventana de síntesis (ADR-014): la referencia en C (src/synth_ref.c) o, si el equipo lo trae,
+# el asm (MP368K_ASM_SYNTH_SOURCES, definido en targets/target.cmake). Selector de compilación: -DMP368K_ASM=OFF
+# vuelve a C. Con el equipo que traiga asm se arma además una pila "_ref" (siempre C) para comparar las dos
+# en el mismo equipo (codecbench_ref).
+option(MP368K_ASM "Usar los núcleos en ensamblador del equipo, si los hay" ON)
+if(MP368K_ASM_SYNTH_SOURCES)
+    enable_language(ASM)
+endif()
+function(mp368k_codec_stack SFX KERNEL_SRC KERNEL_NAME KERNEL_LABEL)
+    add_library(mad_eq${SFX} STATIC
+        ${MAD_EQ_DIR}/bit.c ${MAD_EQ_DIR}/fixed.c ${MAD_EQ_DIR}/frame.c ${MAD_EQ_DIR}/huffman.c
+        ${MAD_EQ_DIR}/layer12.c ${MAD_EQ_DIR}/layer3.c ${MAD_EQ_DIR}/stream.c ${MAD_EQ_DIR}/synth.c
+        ${MAD_EQ_DIR}/timer.c ${MAD_EQ_DIR}/version.c ${KERNEL_SRC})
+    target_include_directories(mad_eq${SFX} PRIVATE ${MAD_EQ_DIR} ${CMAKE_SOURCE_DIR}/src)
+    target_include_directories(mad_eq${SFX} PUBLIC ${MAD_GEN_DIR})
+    target_compile_definitions(mad_eq${SFX} PRIVATE ${MAD_FPM} NDEBUG HAVE_LIMITS_H
+        SIZEOF_INT=4 SIZEOF_LONG=4 SIZEOF_LONG_LONG=8 MP368K_SYNTH_WINDOW=${KERNEL_NAME})
+    target_compile_options(mad_eq${SFX} PRIVATE -w)
 
-add_library(decoder_core_eq STATIC src/decoder_core.c)
-target_include_directories(decoder_core_eq PUBLIC src)
-target_link_libraries(decoder_core_eq PUBLIC mad_eq)
+    add_library(decoder_core_eq${SFX} STATIC src/decoder_core.c)
+    target_include_directories(decoder_core_eq${SFX} PUBLIC src)
+    target_link_libraries(decoder_core_eq${SFX} PUBLIC mad_eq${SFX})
 
-add_library(codecs STATIC
-    src/arena.c src/codec.c src/codec_mp3.c src/codec_flac.c src/vorbiscomment.c
-    src/id3.c src/mp3info.c src/eq.c src/dr_flac_impl.c)
-target_include_directories(codecs PUBLIC src ${DRFLAC_DIR})
-target_link_libraries(codecs PUBLIC decoder_core_eq)
+    add_library(codecs${SFX} STATIC
+        src/arena.c src/codec.c src/codec_mp3.c src/codec_flac.c src/vorbiscomment.c
+        src/id3.c src/mp3info.c src/eq.c src/dr_flac_impl.c)
+    target_include_directories(codecs${SFX} PUBLIC src ${DRFLAC_DIR})
+    target_compile_definitions(codecs${SFX} PUBLIC MP368K_SYNTH_KERNEL_LABEL="${KERNEL_LABEL}")
+    target_link_libraries(codecs${SFX} PUBLIC decoder_core_eq${SFX})
+endfunction()
+
+if(MP368K_ASM AND MP368K_ASM_SYNTH_SOURCES)
+    mp368k_codec_stack("" "${MP368K_ASM_SYNTH_SOURCES}" mp368k_synth_window_full_040 asm)
+    mp368k_codec_stack(_ref "src/synth_ref.c" mp368k_synth_window_full_ref c)
+    set(MP368K_HAVE_REF_STACK TRUE)
+else()
+    mp368k_codec_stack("" "src/synth_ref.c" mp368k_synth_window_full_ref c)
+endif()
 set_source_files_properties(src/dr_flac_impl.c PROPERTIES COMPILE_OPTIONS -w)
 
 # --- Etapa 6: banco de los códecs (velocidad y CRC contra el PC, sin audio) ------
@@ -226,6 +246,14 @@ if(codecbench IN_LIST MP368K_APPS)
         CONSOLE
         CREATOR "M368")
     target_link_libraries(codecbench codecs mp368k_common)
+endif()
+if(MP368K_HAVE_REF_STACK AND codecbench_ref IN_LIST MP368K_APPS)
+    add_application(codecbench_ref
+        bench/codecbench.c
+        CONSOLE
+        CREATOR "M368")
+    target_compile_definitions(codecbench_ref PRIVATE CODECBENCH_OUT_NAME="bench_results_codecs_ref.txt")
+    target_link_libraries(codecbench_ref codecs_ref mp368k_common)
 endif()
 
 # --- Etapa 5b: el reproductor ---------------------------------------------------

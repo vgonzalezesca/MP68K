@@ -151,3 +151,20 @@ int *__errno(void)
 
     return &e;
 }
+
+/* qsort de libwma (init_vlc ordena los códigos): ordenación de Shell, sin memoria extra. */
+void qsort(void *base, size_t n, size_t size, int (*cmp)(const void *, const void *))
+{
+    unsigned char *b = base;
+    size_t gap, i, j, k;
+
+    for (gap = n / 2; gap > 0; gap /= 2)
+        for (i = gap; i < n; i++)
+            for (j = i; j >= gap && cmp(b + (j - gap) * size, b + j * size) > 0; j -= gap)
+                for (k = 0; k < size; k++) {
+                    unsigned char t = b[(j - gap) * size + k];
+
+                    b[(j - gap) * size + k] = b[j * size + k];
+                    b[j * size + k] = t;
+                }
+}

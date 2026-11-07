@@ -31,7 +31,7 @@ LIBGCC=$("$GCC" -m68040 -msoft-float -print-libgcc-file-name)
 declare -A REF=( [synth_window]="src/synth_ref.c" [dct32]="src/dct32_ref.c" [imdct_l]="src/imdct_ref.c" [pcm]="src/pcm_ref.c" )
 declare -A ASM=( [synth_window]="targets/asm/synth_window_040.s" [dct32]="targets/asm/dct32_040.s" [imdct_l]="targets/asm/imdct_l_040.s" [pcm]="targets/asm/pcm_040.s" )
 TESTS=("$@")
-[[ ${#TESTS[@]} -gt 0 ]] || TESTS=(synth_window dct32 imdct_l pcm mp3_e2e vorbis_e2e)
+[[ ${#TESTS[@]} -gt 0 ]] || TESTS=(synth_window dct32 imdct_l pcm mp3_e2e vorbis_e2e wma_e2e)
 
 "$AS" -m68040 "$ROOT/tests/asm/start.s" -o "$OUT/start.o"
 "$AS" -m68040 "$ROOT/tests/asm/shim.s" -o "$OUT/shim.o"
@@ -119,8 +119,50 @@ vorbis_e2e() {
     cat "$OUT/vorbis_host.txt"
 }
 
+# WMA completos con el códec de MP368K (lector ASF + libwma) bajo qemu-m68k (big-endian) contra el PC (little-endian).
+wma_e2e() {
+    local wma=$OUT/libwma lib=(wmadeci wmafixed ffmpeg_bitstream mdct mdct_lookup fft-ffmpeg) ours=(src/asfparse.c src/id3.c src/arena.c)
+    local files=() f objs=() o
+    for f in testwma2 testwma1; do
+        [[ -f $ROOT/tests/data/$f.wma ]] && files+=("tests/data/$f.wma")
+    done
+    [[ ${#files[@]} -gt 0 ]] || { echo "wma_e2e: faltan los .wma de tests/data (tools/make_testfiles.sh)" >&2; return 1; }
+    "$ROOT/tools/prepare-libwma.sh" "$wma"
+    local srcs=(); for f in "${lib[@]}"; do srcs+=("$wma/$f.c"); done
+    gcc -O2 -w -fwrapv -DMP368K_HOSTREF -DROCKBOX -I"$wma" -I"$wma/codecs/lib" -I"$ROOT/src" "${srcs[@]}" \
+        "${ours[@]/#/$ROOT/}" "$ROOT/src/codec_wma.c" "$ROOT/tests/asm/test_wma_e2e.c" -o "$OUT/wma_host"
+    (cd "$ROOT" && "$OUT/wma_host" "${files[@]}") > "$OUT/wma_host.txt"
+    objs=("$OUT/start.o" "$OUT/shim.o" "$OUT/minilibc_wma.o")
+    "$GCC" "${CFLAGS[@]}" -c "$ROOT/tests/asm/minilibc.c" -o "$OUT/minilibc_wma.o"
+    for f in "${lib[@]}"; do
+        o=$OUT/wma_$f.o
+        "$GCC" -m68040 -msoft-float -O2 -fomit-frame-pointer -ffreestanding -fno-builtin -fwrapv -w -DROCKBOX \
+            -I"$wma" -I"$wma/codecs/lib" -I"$ROOT/src" -c "$wma/$f.c" -o "$o"
+        objs+=("$o")
+    done
+    for f in "${ours[@]}"; do
+        o=$OUT/wma_ours_$(basename "$f" .c).o
+        "$GCC" "${CFLAGS[@]}" -c "$ROOT/$f" -o "$o"; objs+=("$o")
+    done
+    "$GCC" "${CFLAGS[@]}" -DROCKBOX -I"$wma" -I"$wma/codecs/lib" -c "$ROOT/src/codec_wma.c" -o "$OUT/wma_codec.o"; objs+=("$OUT/wma_codec.o")
+    "$GCC" "${CFLAGS[@]}" -c "$ROOT/tests/asm/test_wma_e2e.c" -o "$OUT/wma_e2e.o"; objs+=("$OUT/wma_e2e.o")
+    "$LD" -m m68kelf -static -nostdlib -Ttext=0x80000000 -e _start "${objs[@]}" "$LIBGCC" -o "$OUT/wma_e2e"
+    (cd "$ROOT" && "$QEMU" -cpu m68040 "$OUT/wma_e2e" "${files[@]}") > "$OUT/wma_m68k.txt"
+    if diff -u "$OUT/wma_host.txt" "$OUT/wma_m68k.txt" > "$OUT/wma.diff"; then
+        echo "  OK    WMA en 68k (big-endian, qemu) == PC (little-endian): CRC del PCM igual en ${#files[@]} archivos"
+    else
+        echo "  FALLA WMA en 68k distinto del PC:"; cat "$OUT/wma.diff"; return 1
+    fi
+    cat "$OUT/wma_host.txt"
+}
+
 rc=0
 for t in "${TESTS[@]}"; do
+    if [[ $t == wma_e2e ]]; then
+        echo "== wma_e2e"
+        wma_e2e || rc=1
+        continue
+    fi
     if [[ $t == vorbis_e2e ]]; then
         echo "== vorbis_e2e"
         vorbis_e2e || rc=1

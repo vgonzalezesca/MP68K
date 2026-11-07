@@ -31,7 +31,7 @@ LIBGCC=$("$GCC" -m68040 -msoft-float -print-libgcc-file-name)
 declare -A REF=( [synth_window]="src/synth_ref.c" [dct32]="src/dct32_ref.c" [imdct_l]="src/imdct_ref.c" [pcm]="src/pcm_ref.c" )
 declare -A ASM=( [synth_window]="targets/asm/synth_window_040.s" [dct32]="targets/asm/dct32_040.s" [imdct_l]="targets/asm/imdct_l_040.s" [pcm]="targets/asm/pcm_040.s" )
 TESTS=("$@")
-[[ ${#TESTS[@]} -gt 0 ]] || TESTS=(synth_window dct32 imdct_l pcm mp3_e2e)
+[[ ${#TESTS[@]} -gt 0 ]] || TESTS=(synth_window dct32 imdct_l pcm mp3_e2e vorbis_e2e)
 
 "$AS" -m68040 "$ROOT/tests/asm/start.s" -o "$OUT/start.o"
 "$AS" -m68040 "$ROOT/tests/asm/shim.s" -o "$OUT/shim.o"
@@ -85,8 +85,47 @@ mp3_e2e() {
     return $rc_e2e
 }
 
+# Ogg Vorbis completos con Tremor (copia parcheada) bajo qemu-m68k, que es big-endian como el 68k real, contra el mismo
+# programa compilado en el PC (little-endian). El decodificador es entero: el CRC del PCM debe coincidir exactamente.
+vorbis_e2e() {
+    local trem=$OUT/tremor lib=(bitwise codebook dsp floor0 floor1 floor_lookup framing info mapping0 mdct misc res012 vorbisfile)
+    local files=() f objs=() o
+    for f in testvorbis testvorbismono; do
+        [[ -f $ROOT/tests/data/$f.ogg ]] && files+=("tests/data/$f.ogg")
+    done
+    [[ ${#files[@]} -gt 0 ]] || { echo "vorbis_e2e: faltan los .ogg de tests/data (tools/make_testfiles.sh)" >&2; return 1; }
+    "$ROOT/tools/prepare-tremor.sh" "$trem"
+    local srcs=(); for f in "${lib[@]}"; do srcs+=("$trem/$f.c"); done
+    gcc -O2 -w -fwrapv -DMP368K_HOSTREF -DMP368K_TREMOR -I"$trem" -I"$ROOT/src" "${srcs[@]}" "$ROOT/src/heap.c" \
+        "$ROOT/tests/asm/test_vorbis_e2e.c" -o "$OUT/vorbis_host"
+    (cd "$ROOT" && "$OUT/vorbis_host" "${files[@]}") | sed 's/ heap=.*//' > "$OUT/vorbis_host.txt"
+    objs=("$OUT/start.o" "$OUT/shim.o" "$OUT/minilibc_vorbis.o")
+    "$GCC" "${CFLAGS[@]}" -c "$ROOT/tests/asm/minilibc.c" -o "$OUT/minilibc_vorbis.o"
+    for f in "${lib[@]}"; do
+        o=$OUT/tremor_$f.o
+        "$GCC" -m68040 -msoft-float -O2 -fomit-frame-pointer -ffreestanding -fno-builtin -fwrapv -w -DMP368K_TREMOR \
+            -I"$trem" -I"$ROOT/src" -c "$trem/$f.c" -o "$o"
+        objs+=("$o")
+    done
+    "$GCC" "${CFLAGS[@]}" -c "$ROOT/src/heap.c" -o "$OUT/heap.o"; objs+=("$OUT/heap.o")
+    "$GCC" "${CFLAGS[@]}" -DMP368K_TREMOR -I"$trem" -c "$ROOT/tests/asm/test_vorbis_e2e.c" -o "$OUT/vorbis_e2e.o"; objs+=("$OUT/vorbis_e2e.o")
+    "$LD" -m m68kelf -static -nostdlib -Ttext=0x80000000 -e _start "${objs[@]}" "$LIBGCC" -o "$OUT/vorbis_e2e"
+    (cd "$ROOT" && "$QEMU" -cpu m68040 "$OUT/vorbis_e2e" "${files[@]}") | sed 's/ heap=.*//' > "$OUT/vorbis_m68k.txt"
+    if diff -u "$OUT/vorbis_host.txt" "$OUT/vorbis_m68k.txt" > "$OUT/vorbis.diff"; then
+        echo "  OK    Tremor en 68k (big-endian, qemu) == PC (little-endian): CRC del PCM igual en ${#files[@]} archivos"
+    else
+        echo "  FALLA Tremor en 68k distinto del PC:"; cat "$OUT/vorbis.diff"; return 1
+    fi
+    cat "$OUT/vorbis_host.txt"
+}
+
 rc=0
 for t in "${TESTS[@]}"; do
+    if [[ $t == vorbis_e2e ]]; then
+        echo "== vorbis_e2e"
+        vorbis_e2e || rc=1
+        continue
+    fi
     if [[ $t == mp3_e2e ]]; then
         echo "== mp3_e2e"
         mp3_e2e || rc=1

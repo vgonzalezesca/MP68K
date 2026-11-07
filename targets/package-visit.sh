@@ -3,7 +3,7 @@
 #
 #   sysprobe/  microbench/  decbench/  decprofile/  audiotest/  mp368k/  segtest/   aplicaciones (.bin y .dsk)
 #   mp3/                                test128.mp3 test192.mp3 testmono.mp3 + REFERENCE.txt
-#   audio/                              MP3 y FLAC para codecbench + REFERENCE_CODECS.txt
+#   audio/                              MP3, FLAC y Ogg Vorbis para codecbench + REFERENCE_CODECS.txt
 #
 # decbench, decprofile y audiotest buscan los MP3 y REFERENCE.txt en la MISMA carpeta que la aplicación.
 # Requiere haber ejecutado tools/build.sh, tools/make_testfiles.sh y tools/host-ref.sh.
@@ -29,7 +29,7 @@ done
 
 # codecbench busca estos archivos y REFERENCE_CODECS.txt en la MISMA carpeta que la aplicación.
 mkdir -p "$OUT/audio"
-for f in test128.mp3 test192.mp3 testmono.mp3 testflac.flac testflacmono.flac testflac24.flac testflac8.flac REFERENCE_CODECS.txt; do
+for f in test128.mp3 test192.mp3 testmono.mp3 testflac.flac testflacmono.flac testflac24.flac testflac8.flac testvorbis.ogg testvorbismono.ogg REFERENCE_CODECS.txt; do
     [[ -f $ROOT/tests/data/$f ]] || { echo "falta tests/data/$f: ejecute tools/make_testfiles.sh y tools/host-codec-ref.sh" >&2; exit 1; }
     cp "$ROOT/tests/data/$f" "$OUT/audio/"
 done

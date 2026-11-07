@@ -98,3 +98,56 @@ void *realloc(void *p, size_t n)
         memcpy(q, p, n);
     return q;
 }
+
+/* Lo que pide Tremor (vorbisfile.c) aunque el banco no lo ejecute: ov_open/ov_test con FILE, mensajes, ctype. */
+int abs(int x) { return x < 0 ? -x : x; }
+long labs(long x) { return x < 0 ? -x : x; }
+
+size_t strlen(const char *s)
+{
+    size_t n = 0;
+
+    while (s[n])
+        n++;
+    return n;
+}
+
+char *strcpy(char *d, const char *s)
+{
+    char *r = d;
+
+    while ((*d++ = *s++))
+        ;
+    return r;
+}
+
+char *strcat(char *d, const char *s)
+{
+    strcpy(d + strlen(d), s);
+    return d;
+}
+
+void *memchr(const void *s, int c, size_t n)
+{
+    const unsigned char *p = s;
+
+    for (; n; n--, p++)
+        if (*p == (unsigned char)c)
+            return (void *)p;
+    return 0;
+}
+
+int fclose(void *f) { (void)f; return -1; }
+int fseek(void *f, long off, int whence) { (void)f; (void)off; (void)whence; return -1; }
+long ftell(void *f) { (void)f; return -1; }
+size_t fread(void *p, size_t s, size_t n, void *f) { (void)p; (void)s; (void)n; (void)f; return 0; }
+int fprintf(void *f, const char *fmt, ...) { (void)f; (void)fmt; return 0; }
+
+const char _ctype_[257];
+void *_impure_ptr;
+int *__errno(void)
+{
+    static int e;
+
+    return &e;
+}

@@ -61,6 +61,13 @@ void *arena_alloc(Arena *a, size_t n)
     return blk + HDR;
 }
 
+size_t arena_remaining(const Arena *a)
+{
+    size_t left = a->size - a->used;
+
+    return left > HDR ? (left - HDR) & ~(size_t)(ALIGN - 1) : 0;
+}
+
 void arena_free(Arena *a, void *p)
 {
     if (p == NULL)

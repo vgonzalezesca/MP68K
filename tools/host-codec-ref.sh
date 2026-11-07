@@ -20,7 +20,8 @@ root, binary, secs = sys.argv[1], sys.argv[2], int(sys.argv[3])
 EQ_BENCH = "12,-6,4,0,10,-12,8,0,-4,12,0"        # debe coincidir con kBenchEq de bench/codecbench.c
 data = os.path.join(root, "tests", "data")
 files = ["test128.mp3", "test192.mp3", "testmono.mp3",
-         "testflac.flac", "testflacmono.flac", "testflac24.flac", "testflac8.flac"]
+         "testflac.flac", "testflacmono.flac", "testflac24.flac", "testflac8.flac",
+         "testvorbis.ogg", "testvorbismono.ogg"]
 out = [
     "# Referencia del PC para codecbench. Generado por tools/host-codec-ref.sh",
     f"# primeros {secs} s de cada archivo; pcm_crc = CRC-32 del PCM en big-endian por muestra",

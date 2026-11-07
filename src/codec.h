@@ -62,6 +62,8 @@ typedef struct Codec {
     int (*next)(DecFrame *out);
     int (*seek)(unsigned long ms);
     void (*close)(void);
+    /* Opcional (NULL = el pico del arena): bytes de memoria usados como máximo desde open. */
+    size_t (*mem_peak)(void);
 } Codec;
 
 /* Reserva para los códecs que asignan memoria. Llamar una vez, antes de abrir nada. */
@@ -80,5 +82,6 @@ int codec_name_matches(const char *name, unsigned long mac_type);
 /* Los códecs registrados (para pruebas). */
 extern const Codec codec_mp3;
 extern const Codec codec_flac;
+extern const Codec codec_vorbis;
 
 #endif

@@ -23,6 +23,13 @@ for f in test128 test192 testmono; do
     "$B/test_units" "$ROOT/tests/data/$f.mp3" "$B/own.csv" || rc=1
 done
 
+# --- etapa 6: asignador de uso general (heap) para Tremor y libwma, en 64 y 32 bits ---
+for bits in 64 32; do
+    gcc -m$bits -O2 -Wall -Wextra -I"$ROOT/src" "$ROOT/src/heap.c" "$ROOT/tests/host/test_heap.c" -o "$B/test_heap$bits"
+    echo "== heap ($bits bits)"
+    "$B/test_heap$bits" || rc=1
+done
+
 # --- etapa 5b-2: id3, order y mp3info ---
 gcc -O2 -Wall -Wextra -Wno-unused -I"$ROOT/src" "$ROOT/src/id3.c" "$ROOT/src/order.c" \
     "$ROOT/tests/host/test_modules.c" -o "$B/test_modules"

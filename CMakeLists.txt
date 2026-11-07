@@ -213,6 +213,27 @@ if(NOT MAD_EQ_RESULT EQUAL 0)
     message(FATAL_ERROR "tools/prepare-libmad-eq.sh fallo")
 endif()
 
+# Tremor (rama lowmem) con los cambios de MP368K (ADR-009): otra copia parcheada, sin tocar third_party/tremor/.
+set(TREMOR_DIR ${CMAKE_BINARY_DIR}/tremor)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+    ${CMAKE_SOURCE_DIR}/tools/prepare-tremor.sh
+    ${CMAKE_SOURCE_DIR}/third_party/patches/tremor-lowmem-mp368k.patch
+    ${CMAKE_SOURCE_DIR}/third_party/patches/mp368k_tremor.h)
+execute_process(
+    COMMAND ${CMAKE_SOURCE_DIR}/tools/prepare-tremor.sh ${TREMOR_DIR}
+    RESULT_VARIABLE TREMOR_RESULT)
+if(NOT TREMOR_RESULT EQUAL 0)
+    message(FATAL_ERROR "tools/prepare-tremor.sh fallo")
+endif()
+add_library(tremor STATIC
+    ${TREMOR_DIR}/bitwise.c ${TREMOR_DIR}/codebook.c ${TREMOR_DIR}/dsp.c ${TREMOR_DIR}/floor0.c
+    ${TREMOR_DIR}/floor1.c ${TREMOR_DIR}/floor_lookup.c ${TREMOR_DIR}/framing.c ${TREMOR_DIR}/info.c
+    ${TREMOR_DIR}/mapping0.c ${TREMOR_DIR}/mdct.c ${TREMOR_DIR}/misc.c ${TREMOR_DIR}/res012.c
+    ${TREMOR_DIR}/vorbisfile.c)
+target_include_directories(tremor PRIVATE ${TREMOR_DIR})
+target_compile_definitions(tremor PRIVATE MP368K_TREMOR)
+target_compile_options(tremor PRIVATE -w -fwrapv)      # código de terceros: sin avisos; la envoltura de enteros es la esperada
+
 # Núcleos de la síntesis del MP3 (ADR-014): por omisión, la libmad original en C. Si el equipo trae asm
 # (MP368K_ASM_KERNEL_SOURCES y MP368K_ASM_KERNEL_DEFS, definidos en targets/target.cmake), la pila principal los
 # usa y se arma además una pila "_ref" con la libmad original para comparar las dos en el mismo equipo
@@ -238,11 +259,11 @@ function(mp368k_codec_stack SFX KERNEL_LABEL)
     target_link_libraries(decoder_core_eq${SFX} PUBLIC mad_eq${SFX} mp368k_common)
 
     add_library(codecs${SFX} STATIC
-        src/arena.c src/codec.c src/codec_mp3.c src/codec_flac.c src/vorbiscomment.c
+        src/arena.c src/heap.c src/codec.c src/codec_mp3.c src/codec_flac.c src/codec_vorbis.c src/vorbiscomment.c
         src/id3.c src/mp3info.c src/eq.c src/dr_flac_impl.c)
     target_include_directories(codecs${SFX} PUBLIC src ${DRFLAC_DIR})
     target_compile_definitions(codecs${SFX} PUBLIC MP368K_SYNTH_KERNEL_LABEL="${KERNEL_LABEL}")
-    target_link_libraries(codecs${SFX} PUBLIC decoder_core_eq${SFX})
+    target_link_libraries(codecs${SFX} PUBLIC decoder_core_eq${SFX} tremor)
 endfunction()
 
 if(MP368K_ASM AND MP368K_ASM_KERNEL_SOURCES)
@@ -254,6 +275,7 @@ else()
     mp368k_codec_stack("" c)
 endif()
 set_source_files_properties(src/dr_flac_impl.c PROPERTIES COMPILE_OPTIONS -w)
+set_source_files_properties(src/codec_vorbis.c PROPERTIES COMPILE_OPTIONS "-I${TREMOR_DIR};-DMP368K_TREMOR")
 
 # --- Etapa 6: banco de los códecs (velocidad y CRC contra el PC, sin audio) ------
 if(codecbench IN_LIST MP368K_APPS)

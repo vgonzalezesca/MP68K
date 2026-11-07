@@ -99,7 +99,7 @@ static const char *play_error_text(OSErr err)
 {
     switch (err) {
     case PLAYER_ERR_UNSUPPORTED:
-        return "This file is not in a supported audio format (MP3 or FLAC), or it is damaged.";
+        return "This file is not in a supported audio format (MP3, FLAC or Ogg Vorbis), or it is damaged.";
     case PLAYER_ERR_PARAMS:
         return "This player can only play audio with 1 or 2 channels and a sample rate from 8 to 48 kHz.";
     case memFullErr:

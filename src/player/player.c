@@ -15,7 +15,7 @@
 #include "memblock.h"
 
 #define READ_BUF_BYTES   (32L * 1024)
-#define CODEC_ARENA_BYTES (256L * 1024)    /* memoria de los códecs de terceros; FLAC usa ~36 KB (medido en el PC) */
+#define CODEC_ARENA_BYTES (256L * 1024)    /* memoria de los códecs de terceros; FLAC ~36 KB y Vorbis ~40 KB en el archivo de prueba (medido en el PC) */
 #define APP_RING_MS      4000       /* colchón para menús y arrastres que bloquean el bucle */
 #define PREROLL_MS       250
 #define IDLE_BUDGET_US   20000UL    /* tope por llamada: eventos al menos cada ~50 ms (RNF2) */
@@ -665,6 +665,7 @@ const PlayerStatus *player_status(void)
         s->position_ms = s->duration_ms;
     s->underruns = audio_underruns() - P.under_total_base;
     s->max_gap_ms = P.max_gap_ms;
-    s->arena_peak = (unsigned long)codec_arena()->peak;
+    s->arena_peak = (P.codec != NULL && P.codec->mem_peak != NULL) ? (unsigned long)P.codec->mem_peak()
+                                                                    : (unsigned long)codec_arena()->peak;
     return s;
 }

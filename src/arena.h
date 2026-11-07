@@ -29,5 +29,7 @@ void arena_reset(Arena *a);
 void *arena_alloc(Arena *a, size_t n);
 void *arena_realloc(Arena *a, void *p, size_t n);
 void arena_free(Arena *a, void *p);
+/* Mayor n con el que arena_alloc(a, n) aún cabe (0 si no cabe nada). Sirve para ceder todo el resto a un heap. */
+size_t arena_remaining(const Arena *a);
 
 #endif

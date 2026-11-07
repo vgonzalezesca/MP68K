@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""Pruebas de la capa de códecs en el PC (FLAC, y MP3 a través de la capa nueva).
+"""Pruebas de la capa de códecs en el PC (FLAC, Ogg Vorbis, y MP3 a través de la capa nueva).
 
 Uso: check_codecs.py <raíz del proyecto>
 
 Compara test_codecs (los mismos fuentes que la app Mac, en 64 y en 32 bits) contra referencias
-independientes: `flac -d` para el PCM de FLAC, y los .raw de hostdec para el MP3. Comprueba además
+independientes: `flac -d` para el PCM de FLAC, `ffmpeg` para Ogg Vorbis (Tremor es entero: se admite 1 LSB), y los .raw
+de hostdec para el MP3. Comprueba además
 etiquetas con acentos, duración, búsqueda (con y sin SEEKTABLE), y robustez: archivos truncados,
 corruptos, basura, ID3v2 delante, una carátula enorme, canales o tasa no admitidos y arena chico.
 Sale con 1 si algo falla.
@@ -112,6 +113,105 @@ def main():
                         good = False
                         print(f"      ms={ms}: rc={rc} {len(got)} vs {len(exp)} muestras {kv}")
                 check(f"[{bits}] búsqueda {label}: 6 posiciones", good)
+
+        print("== Ogg Vorbis (Tremor): información")
+        for bits, binary in BINS.items():
+            rc, kv = run(binary, "info", os.path.join(DATA, "testvorbis.ogg"))
+            check(f"[{bits}] Vorbis: formato, tasa y canales",
+                  kv.get("format") == "Vorbis" and kv.get("rate") == "44100" and kv.get("channels") == "2", str(kv))
+            check(f"[{bits}] Vorbis: duración exacta (granule de la última página)", kv.get("duration_ms") == "60000", kv.get("duration_ms", ""))
+            check(f"[{bits}] Vorbis: título, artista y álbum con acentos en MacRoman",
+                  (kv.get("title"), kv.get("artist"), kv.get("album")) == (want_title, want_artist, want_album), str(kv))
+            check(f"[{bits}] Vorbis: sin perfiles ni ecualizador", kv.get("profiles") == "0" and kv.get("eq") == "0")
+            rc, kv = run(binary, "info", os.path.join(DATA, "testvorbismono.ogg"))
+            check(f"[{bits}] Vorbis mono: 1 canal", kv.get("format") == "Vorbis" and kv.get("channels") == "1", str(kv))
+
+        print("== Ogg Vorbis: PCM contra ffmpeg (Tremor es entero: se admite 1 LSB) y 32 == 64 bits")
+        for name in ("testvorbis.ogg", "testvorbismono.ogg"):
+            path = os.path.join(DATA, name)
+            refraw = os.path.join(tmp, "vref.raw")
+            subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", path, "-f", "s16le", "-acodec", "pcm_s16le", refraw], check=True)
+            ref = np.fromfile(refraw, dtype="<i2").astype(np.int64)
+            outs = {}
+            for bits, binary in BINS.items():
+                out = os.path.join(tmp, f"v{bits}.raw")
+                rc, kv = run(binary, "decode", path, out)
+                outs[bits] = np.fromfile(out, dtype="<i2")
+                got = outs[bits].astype(np.int64)
+                same_len = got.shape == ref.shape
+                d = np.abs(got - ref) if same_len else np.array([99999])
+                check(f"[{bits}] {name}: {len(got)} muestras, error máx {int(d.max())} LSB, rms {float(np.sqrt(np.mean(d * d))):.2f}",
+                      rc == 0 and same_len and int(d.max()) <= 2 and float(np.sqrt(np.mean(d * d))) < 1.0, str(kv))
+                if bits == "64":
+                    check(f"[{bits}] {name}: heap de Tremor {int(kv.get('mem_peak', '0')) // 1024} KB",
+                          0 < int(kv.get("mem_peak", "0")) < 200 * 1024, str(kv))
+            check(f"{name}: mismos bytes en 32 y 64 bits", np.array_equal(outs["32"], outs["64"]))
+
+        print("== Ogg Vorbis: búsqueda (comparada con la decodificación completa del mismo Tremor)")
+        vpath = os.path.join(DATA, "testvorbis.ogg")
+        for bits, binary in BINS.items():
+            full = os.path.join(tmp, "vfull.raw")
+            run(binary, "decode", vpath, full)
+            ref = np.fromfile(full, dtype="<i2").astype(np.int64)
+            good, worst = True, 0
+            for ms in (0, 1000, 15007, 30014, 45021, 59990):
+                out = os.path.join(tmp, "vseek.raw")
+                rc, kv = run(binary, "seek", vpath, ms, out, 3000)
+                frame = ms * 44100 // 1000
+                exp = ref[frame * 2:(frame + 3000) * 2]
+                got = np.fromfile(out, dtype="<i2").astype(np.int64)
+                if rc != 0 or got.shape != exp.shape:
+                    good = False
+                    print(f"      ms={ms}: rc={rc} {len(got)} vs {len(exp)} muestras {kv}")
+                    continue
+                worst = max(worst, int(np.abs(got - exp).max()))
+            check(f"[{bits}] búsqueda: 6 posiciones, diferencia máxima {worst} LSB", good and worst <= 1)
+
+        print("== Ogg Vorbis: robustez (no deben colgarse ni caerse)")
+        ogg = open(vpath, "rb").read()
+        rng = random.Random(369)
+        vcases = {}
+        vcases["truncado al 30 %"] = ogg[: len(ogg) * 3 // 10]
+        vcases["truncado a 100 bytes"] = ogg[:100]
+        vcases["truncado dentro de las cabeceras"] = ogg[:3000]
+        corrupt = bytearray(ogg)
+        for _ in range(200):
+            corrupt[rng.randrange(8192, len(corrupt))] ^= 0xFF
+        vcases["200 bytes dañados"] = bytes(corrupt)
+        corrupt = bytearray(ogg)
+        for _ in range(40):
+            corrupt[rng.randrange(0, 6000)] ^= 0xFF
+        vcases["40 bytes dañados en las cabeceras"] = bytes(corrupt)
+        vcases["basura aleatoria"] = bytes(rng.randrange(256) for _ in range(50000))
+        vcases["solo 'OggS'"] = b"OggS"
+        vcases["páginas Ogg vacías"] = (b"OggS\x00\x02" + b"\x00" * 8 + b"\x01\x00\x00\x00" + b"\x00" * 9 + b"\x00") * 50
+        for label, blob in vcases.items():
+            path = os.path.join(tmp, "vcase.bin")
+            open(path, "wb").write(blob)
+            for bits, binary in BINS.items():
+                try:
+                    rc, kv = run(binary, "decode", path, os.path.join(tmp, "o.raw"), timeout=60)
+                    ok = 0 <= rc < 100
+                except subprocess.TimeoutExpired:
+                    ok, rc = False, "TIMEOUT"
+                check(f"[{bits}] {label}", ok, f"rc={rc}")
+
+        print("== Ogg Vorbis: límites declarados")
+        w96 = os.path.join(tmp, "v96.wav")
+        subprocess.run(["sox", src, "-r", "96000", w96], check=True)
+        v96 = os.path.join(tmp, "v96.ogg")
+        subprocess.run(["oggenc", "-Q", "-q", "3", w96, "-o", v96], check=True)
+        w6v = os.path.join(tmp, "v6.wav")
+        subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", src, "-ac", "6", w6v], check=True)
+        v6 = os.path.join(tmp, "v6.ogg")
+        subprocess.run(["oggenc", "-Q", "-q", "3", w6v, "-o", v6], check=True)
+        for bits, binary in BINS.items():
+            rc, kv = run(binary, "info", v96)
+            check(f"[{bits}] Vorbis de 96 kHz: rechazado con CODEC_ERR_PARAMS (-3)", kv.get("error") == "-3", str(kv))
+            rc, kv = run(binary, "info", v6)
+            check(f"[{bits}] Vorbis de 6 canales: rechazado con CODEC_ERR_PARAMS (-3)", kv.get("error") == "-3", str(kv))
+            rc, kv = run(binary, "decode", vpath, os.path.join(tmp, "o.raw"), 0, 16)
+            check(f"[{bits}] arena de 16 KB: error de memoria limpio (open:-4)", kv.get("error") == "open:-4", str(kv))
 
         print("== MP3 por la capa nueva: mismo PCM que hostdec")
         prof = {"FULL": 0, "HALF": 1, "MONO": 2, "HALF_MONO": 3}

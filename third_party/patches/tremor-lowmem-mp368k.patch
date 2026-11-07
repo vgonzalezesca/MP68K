@@ -1,0 +1,62 @@
+--- a/os_types.h
++++ b/os_types.h
+@@ -32,7 +32,26 @@
+ #define _ogg_realloc realloc
+ #define _ogg_free    free
+ 
+-#ifdef _WIN32 
++/* mp368k: asignaciones sobre el heap del códec (src/codec_vorbis.c), tipos de stdint.h */
++#ifdef MP368K_TREMOR
++#  include <stddef.h>
++#  include <stdint.h>
++#  include "mp368k_tremor.h"
++#  undef _ogg_malloc
++#  undef _ogg_calloc
++#  undef _ogg_realloc
++#  undef _ogg_free
++#  define _ogg_malloc  mp368k_tremor_malloc
++#  define _ogg_calloc  mp368k_tremor_calloc
++#  define _ogg_realloc mp368k_tremor_realloc
++#  define _ogg_free    mp368k_tremor_free
++   typedef int16_t ogg_int16_t;
++   typedef uint16_t ogg_uint16_t;
++   typedef int32_t ogg_int32_t;
++   typedef uint32_t ogg_uint32_t;
++   typedef int64_t ogg_int64_t;
++#elif defined(_WIN32)
++
+ 
+ #  ifndef __GNUC__
+    /* MSVC/Borland */
+--- a/misc.h
++++ b/misc.h
+@@ -46,6 +46,21 @@
+ #ifndef  _LOW_ACCURACY_
+ /* 64 bit multiply */
+ 
++#ifdef MP368K_TREMOR
++/* mp368k: mismas cuentas que la versión con "union magic", pero con desplazamientos de 64 bits: no depende de la
++   endianidad ni de <sys/types.h>, y en el 68040 sale un muls.l. */
++static inline ogg_int32_t MULT32(ogg_int32_t x, ogg_int32_t y) {
++  return (ogg_int32_t)(((ogg_int64_t)x * y) >> 32);
++}
++
++static inline ogg_int32_t MULT31(ogg_int32_t x, ogg_int32_t y) {
++  return MULT32(x,y)<<1;
++}
++
++static inline ogg_int32_t MULT31_SHIFT15(ogg_int32_t x, ogg_int32_t y) {
++  return (ogg_int32_t)(((ogg_int64_t)x * y) >> 15);
++}
++#else
+ #include <sys/types.h>
+ 
+ #if BYTE_ORDER==LITTLE_ENDIAN
+@@ -83,6 +98,7 @@
+   magic.whole  = (ogg_int64_t)x * y;
+   return ((ogg_uint32_t)(magic.halves.lo)>>15) | ((magic.halves.hi)<<17);
+ }
++#endif /* MP368K_TREMOR */
+ 
+ #else
+ /* 32 bit multiply, more portable but less accurate */

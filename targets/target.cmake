@@ -9,8 +9,10 @@ set(MP368K_APPS sysprobe microbench decbench decprofile audiotest codecbench cod
 
 # Núcleos en ensamblador 68040 (ADR-008, ADR-014). Con -DMP368K_ASM=OFF el build usa la libmad original en C.
 # Con asm activo también se arma codecbench_ref (misma pila, libmad original) para compararlos en el mismo equipo.
-set(MP368K_ASM_KERNEL_SOURCES targets/asm/synth_window_040.s targets/asm/dct32_040.s)
-set(MP368K_ASM_KERNEL_DEFS MP368K_SYNTH_WINDOW=mp368k_synth_window_full_040 MP368K_DCT32=mp368k_dct32_040)
+set(MP368K_ASM_KERNEL_SOURCES targets/asm/synth_window_040.s targets/asm/dct32_040.s
+    targets/asm/imdct_l_040.s)
+set(MP368K_ASM_KERNEL_DEFS MP368K_SYNTH_WINDOW=mp368k_synth_window_full_040 MP368K_DCT32=mp368k_dct32_040
+    MP368K_IMDCT_L=mp368k_imdct_l_040)
 
 function(mp368k_target_apps)
     # Regla 6: comprobar que un segmento de código de más de 100 KB corre (targets/segtest.c).

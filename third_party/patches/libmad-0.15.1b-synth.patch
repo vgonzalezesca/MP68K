@@ -18,8 +18,8 @@
        po = ((phase - 1) & 0xf) | 1;
 +#if defined(MP368K_SYNTH_WINDOW)
 +      /* mp368k: las 32 muestras del slot salen del núcleo; mismas cuentas que el bloque de abajo */
-+      MP368K_SYNTH_WINDOW(&(*filter)[0][~phase & 1][0][0], &(*filter)[0][phase & 1][0][0],
-+                          &(*filter)[1][~phase & 1][0][0], &D[0][0], pe, po, pcm1);
++      MP368K_SYNTH_WINDOW((const int32_t *)&(*filter)[0][~phase & 1][0][0], (const int32_t *)&(*filter)[0][phase & 1][0][0],
++                          (const int32_t *)&(*filter)[1][~phase & 1][0][0], (const int32_t *)&D[0][0], pe, po, (int32_t *)pcm1);
 +      pcm1 += 32;
 +#else
  

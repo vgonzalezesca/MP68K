@@ -191,6 +191,7 @@ set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
     ${CMAKE_SOURCE_DIR}/tools/prepare-libmad-eq.sh
     ${CMAKE_SOURCE_DIR}/third_party/patches/libmad-0.15.1b-eq.patch
     ${CMAKE_SOURCE_DIR}/third_party/patches/libmad-0.15.1b-synth.patch
+    ${CMAKE_SOURCE_DIR}/third_party/patches/libmad-0.15.1b-imdct.patch
     ${CMAKE_SOURCE_DIR}/third_party/patches/mp368k_eq.h)
 execute_process(
     COMMAND ${CMAKE_SOURCE_DIR}/tools/prepare-libmad-eq.sh ${MAD_EQ_DIR}

@@ -38,4 +38,15 @@ void mp368k_synth_window_full_040(const int32_t *fx, const int32_t *fe, const in
 void mp368k_dct32_ref(const int32_t in[32], unsigned int slot, int32_t lo[16][8], int32_t hi[16][8]);
 void mp368k_dct32_040(const int32_t in[32], unsigned int slot, int32_t lo[16][8], int32_t hi[16][8]);
 
+/*
+ * IMDCT de una subbanda de un bloque LARGO normal (block_type 0), con ventana, solapado y, si invert != 0, inversión
+ * de frecuencias (muestras impares negadas): lo que hace libmad con III_imdct_l + III_overlap (+ III_freqinver).
+ *   X        18 coeficientes de la subbanda (xr[ch][18*sb])
+ *   overlap  18 palabras: se suman a la salida y se reemplazan por la segunda mitad
+ *   sample   &sample[0][sb]: la muestra i va en sample[32*i]
+ * Referencia GENERADA (src/imdct_ref.c) y kernel asm GENERADO (targets/asm/imdct_l_040.s) del mismo texto de libmad.
+ */
+void mp368k_imdct_l_ref(const int32_t X[18], int32_t overlap[18], int32_t *sample, int invert);
+void mp368k_imdct_l_040(const int32_t X[18], int32_t overlap[18], int32_t *sample, int invert);
+
 #endif

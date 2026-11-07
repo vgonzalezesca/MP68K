@@ -17,6 +17,12 @@ endif()
 # MP368K_LINK_FLAGS, MP368K_APPS y la función mp368k_target_apps().
 include(targets/target.cmake)
 
+# Selector C/asm (ADR-008, ADR-014): -DMP368K_ASM=OFF vuelve a la libmad original y a la referencia en C.
+option(MP368K_ASM "Usar los núcleos en ensamblador del equipo, si los hay" ON)
+if(MP368K_ASM_KERNEL_SOURCES OR MP368K_ASM_COMMON_SOURCES)
+    enable_language(ASM)
+endif()
+
 if(NOT CMAKE_SYSTEM_NAME STREQUAL MP368K_SYSTEM_NAME)
     message(FATAL_ERROR
         "La rama ${MP368K_TARGET} se compila con el toolchain ${MP368K_SYSTEM_NAME}, no con "
@@ -66,11 +72,18 @@ add_library(mp368k_common STATIC
     src/common/fileread.c
     src/common/audio.c
     src/ring.c
-    src/pcmconv.c)
+    src/pcmconv.c
+    src/pcm_ref.c)
 target_include_directories(mp368k_common PUBLIC
     src
     src/common
     ${CMAKE_BINARY_DIR}/generated)
+
+# Conversiones de PCM en asm (u8 y ganancia de la salida): solo las usa pcmconv.c, la salida de audio.
+if(MP368K_ASM AND MP368K_ASM_COMMON_SOURCES)
+    target_sources(mp368k_common PRIVATE ${MP368K_ASM_COMMON_SOURCES})
+    set_source_files_properties(src/pcmconv.c PROPERTIES COMPILE_DEFINITIONS "${MP368K_ASM_COMMON_DEFS}")
+endif()
 
 add_library(mp368k_hooks STATIC targets/hooks.c)
 target_include_directories(mp368k_hooks PRIVATE src)
@@ -204,12 +217,8 @@ endif()
 # (MP368K_ASM_KERNEL_SOURCES y MP368K_ASM_KERNEL_DEFS, definidos en targets/target.cmake), la pila principal los
 # usa y se arma además una pila "_ref" con la libmad original para comparar las dos en el mismo equipo
 # (codecbench_ref). Selector de compilación: -DMP368K_ASM=OFF vuelve a C.
-option(MP368K_ASM "Usar los núcleos en ensamblador del equipo, si los hay" ON)
-if(MP368K_ASM_KERNEL_SOURCES)
-    enable_language(ASM)
-endif()
 function(mp368k_codec_stack SFX KERNEL_LABEL)
-    cmake_parse_arguments(K "" "" "SOURCES;DEFS" ${ARGN})
+    cmake_parse_arguments(K "" "" "SOURCES;DEFS;COREDEFS" ${ARGN})
     add_library(mad_eq${SFX} STATIC
         ${MAD_EQ_DIR}/bit.c ${MAD_EQ_DIR}/fixed.c ${MAD_EQ_DIR}/frame.c ${MAD_EQ_DIR}/huffman.c
         ${MAD_EQ_DIR}/layer12.c ${MAD_EQ_DIR}/layer3.c ${MAD_EQ_DIR}/stream.c ${MAD_EQ_DIR}/synth.c
@@ -222,7 +231,11 @@ function(mp368k_codec_stack SFX KERNEL_LABEL)
 
     add_library(decoder_core_eq${SFX} STATIC src/decoder_core.c)
     target_include_directories(decoder_core_eq${SFX} PUBLIC src)
-    target_link_libraries(decoder_core_eq${SFX} PUBLIC mad_eq${SFX})
+    if(K_COREDEFS)
+        target_compile_definitions(decoder_core_eq${SFX} PRIVATE ${K_COREDEFS})
+    endif()
+    # mp368k_common trae pcm_ref.c / pcm_040.s: debe quedar DESPUÉS de decoder_core_eq en la línea de enlace
+    target_link_libraries(decoder_core_eq${SFX} PUBLIC mad_eq${SFX} mp368k_common)
 
     add_library(codecs${SFX} STATIC
         src/arena.c src/codec.c src/codec_mp3.c src/codec_flac.c src/vorbiscomment.c
@@ -233,7 +246,8 @@ function(mp368k_codec_stack SFX KERNEL_LABEL)
 endfunction()
 
 if(MP368K_ASM AND MP368K_ASM_KERNEL_SOURCES)
-    mp368k_codec_stack("" asm SOURCES ${MP368K_ASM_KERNEL_SOURCES} DEFS ${MP368K_ASM_KERNEL_DEFS})
+    mp368k_codec_stack("" asm SOURCES ${MP368K_ASM_KERNEL_SOURCES} DEFS ${MP368K_ASM_KERNEL_DEFS}
+        COREDEFS ${MP368K_ASM_CORE_DEFS})
     mp368k_codec_stack(_ref c)
     set(MP368K_HAVE_REF_STACK TRUE)
 else()

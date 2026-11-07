@@ -199,23 +199,24 @@ if(NOT MAD_EQ_RESULT EQUAL 0)
     message(FATAL_ERROR "tools/prepare-libmad-eq.sh fallo")
 endif()
 
-# Núcleo de la ventana de síntesis (ADR-014): la referencia en C (src/synth_ref.c) o, si el equipo lo trae,
-# el asm (MP368K_ASM_SYNTH_SOURCES, definido en targets/target.cmake). Selector de compilación: -DMP368K_ASM=OFF
-# vuelve a C. Con el equipo que traiga asm se arma además una pila "_ref" (siempre C) para comparar las dos
-# en el mismo equipo (codecbench_ref).
+# Núcleos de la síntesis del MP3 (ADR-014): por omisión, la libmad original en C. Si el equipo trae asm
+# (MP368K_ASM_KERNEL_SOURCES y MP368K_ASM_KERNEL_DEFS, definidos en targets/target.cmake), la pila principal los
+# usa y se arma además una pila "_ref" con la libmad original para comparar las dos en el mismo equipo
+# (codecbench_ref). Selector de compilación: -DMP368K_ASM=OFF vuelve a C.
 option(MP368K_ASM "Usar los núcleos en ensamblador del equipo, si los hay" ON)
-if(MP368K_ASM_SYNTH_SOURCES)
+if(MP368K_ASM_KERNEL_SOURCES)
     enable_language(ASM)
 endif()
-function(mp368k_codec_stack SFX KERNEL_SRC KERNEL_NAME KERNEL_LABEL)
+function(mp368k_codec_stack SFX KERNEL_LABEL)
+    cmake_parse_arguments(K "" "" "SOURCES;DEFS" ${ARGN})
     add_library(mad_eq${SFX} STATIC
         ${MAD_EQ_DIR}/bit.c ${MAD_EQ_DIR}/fixed.c ${MAD_EQ_DIR}/frame.c ${MAD_EQ_DIR}/huffman.c
         ${MAD_EQ_DIR}/layer12.c ${MAD_EQ_DIR}/layer3.c ${MAD_EQ_DIR}/stream.c ${MAD_EQ_DIR}/synth.c
-        ${MAD_EQ_DIR}/timer.c ${MAD_EQ_DIR}/version.c ${KERNEL_SRC})
+        ${MAD_EQ_DIR}/timer.c ${MAD_EQ_DIR}/version.c ${K_SOURCES})
     target_include_directories(mad_eq${SFX} PRIVATE ${MAD_EQ_DIR} ${CMAKE_SOURCE_DIR}/src)
     target_include_directories(mad_eq${SFX} PUBLIC ${MAD_GEN_DIR})
     target_compile_definitions(mad_eq${SFX} PRIVATE ${MAD_FPM} NDEBUG HAVE_LIMITS_H
-        SIZEOF_INT=4 SIZEOF_LONG=4 SIZEOF_LONG_LONG=8 MP368K_SYNTH_WINDOW=${KERNEL_NAME})
+        SIZEOF_INT=4 SIZEOF_LONG=4 SIZEOF_LONG_LONG=8 ${K_DEFS})
     target_compile_options(mad_eq${SFX} PRIVATE -w)
 
     add_library(decoder_core_eq${SFX} STATIC src/decoder_core.c)
@@ -230,12 +231,12 @@ function(mp368k_codec_stack SFX KERNEL_SRC KERNEL_NAME KERNEL_LABEL)
     target_link_libraries(codecs${SFX} PUBLIC decoder_core_eq${SFX})
 endfunction()
 
-if(MP368K_ASM AND MP368K_ASM_SYNTH_SOURCES)
-    mp368k_codec_stack("" "${MP368K_ASM_SYNTH_SOURCES}" mp368k_synth_window_full_040 asm)
-    mp368k_codec_stack(_ref "src/synth_ref.c" mp368k_synth_window_full_ref c)
+if(MP368K_ASM AND MP368K_ASM_KERNEL_SOURCES)
+    mp368k_codec_stack("" asm SOURCES ${MP368K_ASM_KERNEL_SOURCES} DEFS ${MP368K_ASM_KERNEL_DEFS})
+    mp368k_codec_stack(_ref c)
     set(MP368K_HAVE_REF_STACK TRUE)
 else()
-    mp368k_codec_stack("" "src/synth_ref.c" mp368k_synth_window_full_ref c)
+    mp368k_codec_stack("" c)
 endif()
 set_source_files_properties(src/dr_flac_impl.c PROPERTIES COMPILE_OPTIONS -w)
 

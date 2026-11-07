@@ -30,4 +30,12 @@ void mp368k_synth_window_full_ref(const int32_t *fx, const int32_t *fe, const in
 void mp368k_synth_window_full_040(const int32_t *fx, const int32_t *fe, const int32_t *fo,
                                   const int32_t *D, unsigned int pe, unsigned int po, int32_t *pcm);
 
+/*
+ * DCT de 32 puntos (el dct32 de libmad): in[32] -> lo[i][slot] y hi[i][slot], i = 0..15, con lo/hi de [16][8].
+ * Aritmética de 32 bits con envoltura; cada producto es (int32)(((int64)x*y) >> 28). Referencia GENERADA
+ * (src/dct32_ref.c) y kernel asm GENERADO (targets/asm/dct32_040.s) desde el mismo texto de libmad.
+ */
+void mp368k_dct32_ref(const int32_t in[32], unsigned int slot, int32_t lo[16][8], int32_t hi[16][8]);
+void mp368k_dct32_040(const int32_t in[32], unsigned int slot, int32_t lo[16][8], int32_t hi[16][8]);
+
 #endif

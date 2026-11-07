@@ -14,7 +14,7 @@ OUT=$ROOT/dist/visita1
 rm -rf "$OUT"
 mkdir -p "$OUT/mp3"
 
-for app in sysprobe microbench decbench decprofile audiotest codecbench mp368k segtest; do
+for app in sysprobe microbench decbench decprofile audiotest codecbench codecbench_ref mp368k segtest; do
     for f in "$ROOT/dist/68k/$app/$app.bin" "$ROOT/dist/68k/$app/$app.dsk"; do
         [[ -f $f ]] || { echo "falta $f: ejecute tools/build.sh" >&2; exit 1; }
     done

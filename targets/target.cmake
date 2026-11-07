@@ -5,7 +5,11 @@ set(MP368K_CPU_FLAGS -m68040 -msoft-float)
 set(MP368K_OPT_FLAGS -O2 -fomit-frame-pointer -ffunction-sections -fdata-sections)
 # Se conservan los nombres para MacsBug (sin --mac-strip-macsbug) para depurar.
 set(MP368K_LINK_FLAGS -Wl,-gc-sections)
-set(MP368K_APPS sysprobe microbench decbench decprofile audiotest codecbench mp368k segtest)
+set(MP368K_APPS sysprobe microbench decbench decprofile audiotest codecbench codecbench_ref mp368k segtest)
+
+# Núcleos en ensamblador 68040 (ADR-008, ADR-014). Con -DMP368K_ASM=OFF el build usa la referencia en C.
+# Con asm activo también se arma codecbench_ref (misma pila, solo C) para compararlos en el mismo equipo.
+set(MP368K_ASM_SYNTH_SOURCES targets/asm/synth_window_040.s)
 
 function(mp368k_target_apps)
     # Regla 6: comprobar que un segmento de código de más de 100 KB corre (targets/segtest.c).

@@ -2,7 +2,7 @@
 TARGET=68k
 TRIPLE=m68k-apple-macos
 TOOLCHAIN_NAME=retro68.toolchain.cmake
-APPS=(sysprobe microbench decbench decprofile audiotest codecbench mp368k segtest)
+APPS=(sysprobe microbench decbench decprofile audiotest codecbench codecbench_ref mp368k segtest)
 
 target_check_app() {
     "$ROOT/targets/check-nofpu.sh" "$1" "$2"

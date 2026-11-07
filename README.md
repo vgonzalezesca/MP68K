@@ -14,7 +14,7 @@ An audio player for classic Mac OS. It started as an MP3 player for a **Macintos
 
 Three builds come out of them: **68k**, **PowerPC** and **FAT** (one file with both). The FAT currently contains `sysprobe` only, and has not been run on either side yet.
 
-**Done on the `68k` branch** ([`docs/ETAPA6.md`](docs/ETAPA6.md)): FLAC (checked in an emulator against the PC, bit for bit), a 10-band equalizer for MP3 (tested on the PC, not yet heard on a Mac) and a hand-drawn Platinum icon. **Planned, not implemented:** the PowerPC port, Ogg Vorbis and WMA, other formats through QuickTime, and assembly kernels. Whether Ogg and WMA can reach real time on a 33 MHz 68LC040 is unknown.
+**Done on the `68k` branch** ([`docs/ETAPA6.md`](docs/ETAPA6.md)): FLAC (checked in an emulator against the PC, bit for bit), a 10-band equalizer for MP3, Ogg Vorbis (Tremor) and WMA v1/v2 (libwma), a hand-drawn Platinum icon, and 68040 assembly kernels for the MP3 decoder (polyphase window, DCT32, long-block IMDCT, PCM conversion). Vorbis and WMA match `ffmpeg` to within 1 LSB, and the assembly kernels give the same PCM as the C code, all verified on a PC and under `qemu-m68k` (big-endian); **none of it has been run on a real Mac, and nothing has been timed on the LC 580.** **Planned, not implemented:** the PowerPC port, other formats through QuickTime, assembly for Vorbis/WMA, and the equalizer for Vorbis/WMA. Whether Ogg and WMA can reach real time on a 33 MHz 68LC040 is unknown.
 
 ## Features
 

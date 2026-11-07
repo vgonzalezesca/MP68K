@@ -1,7 +1,11 @@
 # Etapa 6 — Tres solicitudes
 
 Víctor la pide en tres solicitudes separadas. **Orden recomendado: 6-PPC → 6-G → 6-68K.** Así lo general se prueba en
-los dos equipos desde el inicio y el asm optimiza el código ya definitivo. Nada de esta etapa está hecho todavía.
+los dos equipos desde el inicio y el asm optimiza el código ya definitivo.
+
+**Estado (2026-11-07), rama `68k`:** hechos y probados en el PC y bajo QEMU, **sin ver en un Mac ni medir en el LC 580**: capa de códecs, FLAC,
+ecualizador del MP3, ícono, **Ogg Vorbis (Tremor), WMA v1/v2 (libwma) y los núcleos en asm 68040 del MP3** (ADR-009, ADR-014). Pendientes:
+QuickTime, el ecualizador de Vorbis/WMA, el asm de Vorbis/WMA, y todo lo de PPC.
 
 ## 6-PPC — Port al 601 (rama `ppc`)
 
@@ -20,9 +24,9 @@ los dos equipos desde el inicio y el asm optimiza el código ya definitivo. Nada
 | Pieza | Decisión | Nota |
 |---|---|---|
 | Capa de códecs | interfaz común sobre lo que hoy es `dec_stream_*` | `player.c` deja de llamar a libmad directamente |
-| Ogg Vorbis | Tremor (entero) | ADR-009. Revisar sus asignaciones y su uso de pila |
-| FLAC | biblioteca a elegir tras leer el código | ADR-009. Entero; candidatas: dr_flac, libFLAC, la de Rockbox |
-| WMA | `libwma` de Rockbox, v1/v2 | ADR-009. Sin Pro, Lossless, Voice ni DRM. Requiere leer ASF |
+| Ogg Vorbis | Tremor (entero), rama lowmem | ADR-009. **Hecho** (PC y QEMU): heap propio, ~37 KB; PCM a 1 LSB de ffmpeg |
+| FLAC | dr_flac | ADR-009. **Hecho** |
+| WMA | `libwma` de Rockbox, v1/v2 | ADR-009. **Hecho** (PC y QEMU): lector ASF propio; PCM a 1 LSB de ffmpeg. Sin Pro, Lossless, Voice ni DRM |
 | QuickTime | Movie Toolbox, como respaldo para lo no reconocido | ADR-010. Faltan declaraciones: hay que escribirlas |
 | Ecualizador | por coeficientes en lo compartido | ADR-011 |
 | Logo | `tools/make_logo.py` genera `icl8`, `ics8`, `ICN#`, `ics#`, `BNDL` y `FREF`, y una versión mayor para About | Paleta del sistema de 256 colores. A 32×32 los anillos probablemente haya que redibujarlos, no reducirlos |

@@ -94,17 +94,20 @@ Options (Audio Output: Automatic / 8-bit / 16-bit, Show Technical Info) · Windo
   búsqueda lineal.
 - Hasta 512 entradas. Siguiente/Anterior, Shuffle y Repeat siguen `src/order.c` (probado en el PC).
 
-## Formatos de audio (6-G, fase 2: compilado, sin ver en pantalla)
+## Formatos de audio (6-G, fases 2, 4 y 5: compilado, sin ver en pantalla)
 
-- El motor reconoce el formato **por el contenido** (`codec_probe_any`), no por la extensión: MP3 y FLAC. Add Folder… usa la
+- El motor reconoce el formato **por el contenido** (`codec_probe_any`), no por la extensión: MP3, FLAC, Ogg Vorbis y WMA. Add Folder… usa la
   extensión o el tipo de archivo de Mac solo para decidir qué ofrecer.
-- La línea de formato muestra, según el códec: MP3 → `128 kbps  44.1 kHz  Stereo  FULL`; FLAC → `FLAC  16-bit  44.1 kHz  Stereo`.
-- **El menú Quality solo actúa sobre MP3** (los perfiles FULL/HALF/MONO son de libmad): con un FLAC abierto sus ítems quedan
-  desactivados.
+- La línea de formato muestra, según el códec: MP3 → `128 kbps  44.1 kHz  Stereo  FULL`; FLAC → `FLAC  16-bit  44.1 kHz  Stereo`; Vorbis y WMA → `Vorbis  91 kbps  44.1 kHz  Stereo` (el bitrate es el promedio
+  del archivo).
+- **El menú Quality solo actúa sobre MP3** (los perfiles FULL/HALF/MONO son de libmad): con un FLAC, Vorbis o WMA abierto sus ítems quedan
+  desactivados. Tampoco tienen ecualizador todavía (el de MP3 es el único).
 - Si la velocidad medida al empezar una pista no alcanza para tiempo real (RTF < 1,0), la línea del artista dice
   **"May not play in real time"**. Es una medición del equipo donde se corre: en el emulador no dice nada sobre el LC 580.
-- Con Show Technical Info la línea técnica agrega `mem NNK` (pico del arena de los códecs).
-- Límites con mensaje claro: más de 2 canales o una tasa fuera de 8–48 kHz ("…only play audio with 1 or 2 channels…").
+- Con Show Technical Info la línea técnica agrega `mem NNK` (pico del arena de los códecs; en Vorbis, el del heap de Tremor).
+- Vorbis y WMA se agregaron en la fase 4 y 5 (ADR-009): decodifican en el PC y bajo QEMU con el mismo PCM que `ffmpeg` (1 LSB), pero **no se han
+  oído ni visto en un Mac**, y **que alcancen tiempo real en el 68LC040 está sin medir** (el aviso "May not play in real time" lo dirá).
+- Límites con mensaje claro: más de 2 canales o una tasa fuera de 8–48 kHz ("…only play audio with 1 or 2 channels…"). WMA Pro, Voice, Lossless o con DRM: "…not in a supported audio format (MP3, FLAC, Ogg Vorbis or WMA)…".
 
 ## Logo e ícono (6-G, fase 1/1b: compilado, sin ver en el Finder)
 

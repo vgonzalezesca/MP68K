@@ -5,7 +5,7 @@ description: Decodificación de FLAC, Ogg Vorbis y WMA, reproducción por QuickT
 
 # Formatos y ecualizador (etapa 6-G)
 
-**Hecho: la capa de códecs y FLAC (validados en el emulador con `codecbench`) y el ecualizador del MP3 (compilado y probado en el PC). Pendiente: Vorbis, WMA y QuickTime.** Las decisiones están en ADR-009, ADR-010 y ADR-011, y el pedido en `docs/ETAPA6.md`. Lo que
+**Hecho: la capa de códecs y FLAC (validados en el emulador con `codecbench`), el ecualizador del MP3, Ogg Vorbis (Tremor) y WMA (libwma) (los tres últimos probados en el PC y bajo QEMU, no en un Mac). Pendiente: QuickTime y el EQ de Vorbis/WMA.** Las decisiones están en ADR-009, ADR-010 y ADR-011, y el pedido en `docs/ETAPA6.md`. Lo que
 se dice de cada biblioteca hay que **confirmarlo leyendo su código y su licencia** antes de traerla a `third_party/`.
 
 ## Reglas al traer una biblioteca
@@ -32,11 +32,15 @@ extensión ni por el tipo de archivo: los archivos traídos de un PC no suelen t
 ## Formatos
 | Formato | Biblioteca | Notas |
 |---|---|---|
-| Ogg Vorbis | Tremor (entero) | sin Opus ni FLAC en Ogg. Tablas por archivo: revisar memoria |
-| FLAC | a elegir: dr_flac, libFLAC o la de Rockbox | sin pérdida: se puede comprobar bit a bit |
-| WMA v1/v2 | `libwma` de Rockbox | sin Pro, Lossless, Voice ni DRM. Requiere leer ASF. Hay reportes de ruido en algunos flujos: probar contra `ffmpeg` |
+| Ogg Vorbis | Tremor, rama **lowmem** (`third_party/tremor/`, BSD 3 cláusulas) | su propio ogg.h/bitwise/framing, sin libogg; heap propio (`src/heap.c`, ~37 KB); sin Opus ni FLAC en Ogg. Parche en `third_party/patches/tremor-lowmem-mp368k.patch`, copia con `tools/prepare-tremor.sh` |
+| FLAC | dr_flac (`third_party/dr_libs/`, `tools/prepare-dr-flac.sh`) | sin pérdida: se compara bit a bit con `flac -d` |
+| WMA v1/v2 | `libwma` de Rockbox (`third_party/libwma/`, LGPL 2.1+ y GPL 2+) + `src/asfparse.c` propio | sin Pro, Lossless, Voice ni DRM. El único float se reemplazó (`libwma-mp368k.patch`); salida con polaridad invertida y 2 cuadros de arranque (se corrigen). Copia con `tools/prepare-libwma.sh` |
 
-`HALF` y `MONO` solo existen para MP3. Definir sus equivalentes, o que la app informe si no alcanza tiempo real.
+**Cómo se prueba** (`tests/host/check_codecs.py`, 32 y 64 bits): PCM contra `ffmpeg` (admite 1 LSB: Tremor y libwma son enteros, ffmpeg usa float), mismos
+bytes en 32 y 64 bits, búsqueda, archivos dañados/truncados/basura, límites declarados, arena chico. Bajo `qemu-m68k` (big-endian), `targets/asm-test.sh vorbis_e2e wma_e2e`
+compara el CRC del PCM con el del PC. **WMA v1 con exponentes LSP** tiene ~0,2 dB menos de amplitud que ffmpeg (propio de la biblioteca; ADR-009).
+
+`HALF` y `MONO` solo existen para MP3. Para los demás, la app informa si no alcanza tiempo real ("May not play in real time").
 
 ## QuickTime (ADR-010)
 - Las Multiversal traen solo lo básico (`EnterMovies`, `ExitMovies`, `MoviesTask`, `StartMovie`, `StopMovie`, `IsMovieDone`,
@@ -53,7 +57,7 @@ Bandas: 70, 180, 320, 600, 1k, 3k, 6k, 12k, 14k y 16k Hz, más preamp y On (por 
 | Formato | 68k | PPC | Cómo |
 |---|---|---|---|
 | MP3 | **hecho** | sí | gancho `mp368k_eq_hook` en una copia parcheada de libmad, antes de la alias-reduction/IMDCT |
-| Vorbis, WMA | pendiente | pendiente | ganancia sobre los coeficientes, antes de la IMDCT, con la misma tabla |
+| Vorbis, WMA | **pendiente** | pendiente | ganancia sobre los coeficientes, antes de la IMDCT, con la misma tabla (`src/eq.c`) |
 | FLAC | no | sí | filtros muestra a muestra en `targets/eq_iir.c`, solo PPC |
 | QuickTime | no | no | el audio no pasa por la app; controles desactivados |
 
@@ -69,5 +73,4 @@ Bandas: 70, 180, 320, 600, 1k, 3k, 6k, 12k, 14k y 16k Hz, más preamp y On (por 
 - Por qué no filtros en 68k: costarían ≈ 267 % de la CPU a 44,1 kHz estéreo (`docs/SPECS_68K.md`, aritmética, sin medir).
 
 ## Archivos de prueba
-`ffmpeg` del host codifica FLAC, Vorbis, WMAv1 y WMAv2; `flac` y `oggenc` también están instalados. Ampliar `tools/make_testfiles.sh`.
-FLAC se compara bit a bit; Vorbis y WMA, por SNR contra `ffmpeg`.
+`tools/make_testfiles.sh` genera FLAC, Ogg Vorbis (`oggenc -s 368`), WMA v1/v2 (`ffmpeg`), WAV y AIFF. FLAC se compara bit a bit; Vorbis y WMA contra `ffmpeg`.

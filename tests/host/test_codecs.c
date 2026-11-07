@@ -178,10 +178,14 @@ int main(int argc, char **argv)
             return 1;
         }
     }
-    c->close();
-    fclose(out);
-    printf("frames=%lu\nend=%d\narena_peak=%lu\narena_size=%lu\n", frames, rc,
-           (unsigned long)codec_arena()->peak, (unsigned long)codec_arena()->size);
+    {
+        unsigned long mp = c->mem_peak ? (unsigned long)c->mem_peak() : (unsigned long)codec_arena()->peak;
+
+        c->close();
+        fclose(out);
+        printf("frames=%lu\nend=%d\narena_peak=%lu\narena_size=%lu\nmem_peak=%lu\n", frames, rc,
+               (unsigned long)codec_arena()->peak, (unsigned long)codec_arena()->size, mp);
+    }
 #ifdef MP368K_EQ_STATS
     {
         unsigned long b[3];

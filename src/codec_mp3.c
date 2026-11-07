@@ -97,4 +97,4 @@ static void mp3_close(void)
     dec_stream_close();
 }
 
-const Codec codec_mp3 = { "MP3", mp3_sniff, mp3_probe, mp3_open, mp3_next, mp3_seek, mp3_close };
+const Codec codec_mp3 = { "MP3", mp3_sniff, mp3_probe, mp3_open, mp3_next, mp3_seek, mp3_close, NULL };

@@ -270,4 +270,4 @@ static void flac_close(void)
     }
 }
 
-const Codec codec_flac = { "FLAC", flac_sniff, flac_probe, flac_open, flac_next, flac_seek, flac_close };
+const Codec codec_flac = { "FLAC", flac_sniff, flac_probe, flac_open, flac_next, flac_seek, flac_close, NULL };

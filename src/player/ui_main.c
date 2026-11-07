@@ -147,6 +147,9 @@ static void build_format(const PlayerStatus *st, char *out, size_t n)
         } else if (st->bits_src != 0) {
             snprintf(out, n, "%s  %u-bit  %u.%u kHz  %s", st->format, st->bits_src, rate / 1000,
                      (rate % 1000) / 100, ch);
+        } else if (st->bitrate != 0) {
+            snprintf(out, n, "%s  %u kbps  %u.%u kHz  %s", st->format, st->bitrate / 1000, rate / 1000,
+                     (rate % 1000) / 100, ch);
         } else {
             snprintf(out, n, "%s  %u.%u kHz  %s", st->format, rate / 1000, (rate % 1000) / 100, ch);
         }

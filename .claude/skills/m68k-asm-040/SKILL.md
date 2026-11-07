@@ -85,8 +85,7 @@ cada biblioteca (skill `audio-formats`).
 - Incluir: ceros, máximos, mínimos, valores que provoquen saturación, y 10 000
   vectores aleatorios.
 - Ejecutar el mismo test en Basilisk II con JIT activado **y** desactivado.
-- Opcional: ejecutar los kernels bajo `qemu-m68k -cpu m68040` si hay un
-  cross-compilador `m68k-linux-gnu` disponible (verificar). Solo sirve para
+- Se ejecutan bajo `qemu-m68k -cpu m68040` con `targets/asm-test.sh` (ELF autónomo con el GCC y el `ld` de Retro68, sin cross-compilador). Solo sirve para
   corrección; no mide rendimiento real.
 
 ## Metodología de medición
@@ -96,5 +95,21 @@ cada biblioteca (skill `audio-formats`).
   040 es de solo 4 KB.
 - Registrar en `docs/PERF_LOG.md` (etapa 4).
 
-## Convención confirmada / sintaxis confirmada
-(rellenar tras la etapa 0)
+## Convención confirmada / sintaxis confirmada (2026-11-07, Retro68 GCC 16.1.0, `as` de binutils 2.46)
+- **Sintaxis:** GNU as con mnemónicos Motorola y registros con `%` (`move.l 4(%sp),%d0`, `muls.l %d2,%d1:%d0`, `movem.l %d2-%d7/%a2-%a6,-(%sp)`). Es la
+  que emite el propio GCC con `-S`. Macros con `.macro`. **No** llamar a una macro como una instrucción real (`mac`...): se renombraron a `PROD`.
+- **Símbolos sin guion bajo** (`mp368k_synth_window_full_040`, no `_mp368k...`). `int` y punteros de 4 bytes; `int32_t` es `long`, `mad_fixed_t` es `int`:
+  al llamar a un núcleo desde libmad hay que convertir los punteros.
+- **Llamada (GCC m68k):** argumentos en la pila, de derecha a izquierda; primer argumento en `4(%sp)` al entrar; resultado en `d0`. `d0`, `d1`, `a0` y `a1` son de
+  uso libre; **`d2-d7` y `a2-a6` se preservan** (guardarlos con `movem.l`). Tras guardar N bytes, el primer argumento está en `N+4(%sp)`.
+- **`muls.l` 32×32→64:** `muls.l <ea>,Dh:Dl` deja `Dl` = parte baja y `Dh` = alta. `(int32)(((int64)x*y) >> 28)` = `(hi << 4) | (lo >>> 28)`; con `>> 16`,
+  `(hi << 16) | (lo >>> 16)`. Como la suma módulo 2^32 es lineal, en una suma de productos se acumulan `suma(hi)` y `suma(lo >>> n)` por separado y se juntan al final.
+  `muls.l #imm,Dh:Dl` admite constantes de 32 bits. No usar el mismo registro como `<ea>` y `Dh`.
+- **`X / 2` de C redondea hacia cero:** `tst.l d; bpl.s 1f; addq.l #1,d; 1: asr.l #1,d`. Un `asr.l #1` solo no basta.
+- **Desplazamientos inmediatos:** el conteo va de 1 a 8; para 16 o 28 se usa un registro (`moveq #28,%d7; lsr.l %d7,%d0`) o `swap`.
+- Etiquetas numéricas locales (`1:`, `1b`, `1f`) se pueden repetir; `dbra` cuenta en 16 bits.
+- **Alineación del bucle:** `.balign 16` rellena con `nop` en secciones de código (verificado con `objdump`).
+- **Probar:** `targets/asm-test.sh` (QEMU, solo corrección). **Mutantes:** cambiar a propósito una constante, un desplazamiento o un signo en una copia del `.s` y
+  comprobar que la prueba falla; una prueba que no detecta un mutante no prueba nada. Si el sed del mutante no cambió el archivo, el "OK" es falso.
+- **Generador de código recto** (`targets/asm/gen/dflow.py`): DCT32 e IMDCT salen del texto de libmad; sirve para otra rutina recta, no para FFT con bucles de tamaño variable.
+- **Cuándo NO escribir asm:** compilar antes la función con `-S -O2 -m68040`. Si GCC ya emite lo que se escribiría (p. ej. la predicción LPC de FLAC), no hay ganancia.

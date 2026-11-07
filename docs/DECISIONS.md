@@ -194,7 +194,7 @@ con `decprofile` del emulador como guía débil. El selector permite compararlos
 
 **Contexto.** Hay que decodificar sin FPU en el 68LC040 y con licencia compatible con GPL.
 
-**Decisión (a confirmar al traer cada biblioteca en la 6-G, leyendo su código y su licencia).**
+**Decisión (confirmada al traer cada biblioteca, leyendo su código y su licencia: FLAC, Vorbis y WMA abajo).**
 - **Ogg Vorbis:** Tremor, decodificador entero de Xiph. Sin Opus ni FLAC dentro de Ogg.
 - **WMA:** `libwma` de Rockbox (punto fijo, derivada de FFmpeg), v1/v2. Sin Pro, Lossless, Voice ni DRM. Un hilo de
   MPlayer-dev de 2008 reporta ruido audible en algunos flujos: probarla contra `ffmpeg`.
@@ -208,10 +208,43 @@ en las rutas de salida `f32` (que no se llaman y desaparecen con `-gc-sections`)
 binario enlazado, no una lectura del código. `tools/prepare-dr-flac.sh` genera una copia con esos cuatro puntos en aritmética
 entera; el original no se modifica. La búsqueda sigue exacta (probada con y sin SEEKTABLE, 32 y 64 bits). Límites: hasta 2
 canales y de 8 a 48 kHz; 24 bits se reducen a 16 sin redondeo. Las etiquetas y la duración las lee un lector propio, para que
-una carátula grande no pase por el arena. Ogg Vorbis y WMA siguen pendientes de leer su código y su licencia.
+una carátula grande no pase por el arena.
+
+**Resolución de Ogg Vorbis (2026-11-07).** **Tremor, rama `lowmem`** (commit `89a7534` de `gitlab.xiph.org/xiph/tremor`), no la rama
+principal: trae su propio `ogg.h`, `bitwise.c` y `framing.c` (la principal exige libogg) y usa menos memoria. **Licencia BSD de 3
+cláusulas** (leída en su `COPYING`: "Copyright (c) 2002, Xiph.org Foundation"), compatible con GPLv3; el reporte de "GPLv2 en un paquete
+de Fedora" no aplica al código de Xiph. No tiene `float` ni `double` (verificado con `grep` y con `targets/check-nosoftfloat.sh` sobre
+el binario). Todas sus asignaciones pasan por las macros `_ogg_malloc` y compañía: se redirigen al heap del códec
+(`third_party/patches/tremor-lowmem-mp368k.patch`, que además sustituye las multiplicaciones de 64 bits, que dependían de
+`BYTE_ORDER`, por desplazamientos de `int64`; `third_party/tremor/` no se modifica). Como Tremor libera en orden arbitrario, el arena
+(que solo libera lo último) no sirve: `src/heap.c` es un asignador de primer ajuste con fusión, probado con 200 000 operaciones al azar
+en 32 y 64 bits. Tremor no revisa todas sus asignaciones, así que si el heap se agota dentro de una llamada se sale con `longjmp` y el
+códec informa `CODEC_ERR_MEMORY` (probado con heaps de 17 a 64 KB: nunca se cae). El reconocimiento, las etiquetas y la duración los lee
+un lector de páginas Ogg propio, sin Tremor, para no tocar la memoria del decodificador al agregar una pista a la lista. **Medido en el PC:**
+PCM a **1 LSB de `ffmpeg`** (error rms 0,71 LSB, SNR ≈ 80 dB, estéreo y mono), **mismos bytes en 32 y 64 bits**, y el mismo CRC corriendo
+como 68040 big-endian bajo QEMU y como x86 little-endian; heap de Tremor de ~37 KB en el archivo de prueba (q4, ~90 kbps). Límites: hasta
+2 canales y de 8 a 48 kHz; solo el primer flujo si hay varios encadenados. **Tiempo real en el LC 580: sin medir** (puede no alcanzar).
+
+**Resolución de WMA (2026-11-07).** **`libwma` de Rockbox** (commit `a13aaaf`, espejo en GitHub de `git.rockbox.org`) con las piezas de su
+`codeclib` que necesita (bits y VLC de FFmpeg, MDCT, FFT). **Licencias leídas por archivo:** los derivados de FFmpeg son LGPL 2/2.1 "o
+posterior" y los de Rockbox (`wmafixed`, `mdct_lookup`) GPL 2 "o posterior": todo es compatible con la GPLv3 (detalle en
+`third_party/libwma/README.mp368k`). **Tenía un `float` en el camino caliente** (`pow_m1_4`, un truco de exponente y mantisa que corre en
+cada bloque con exponentes LSP): `third_party/patches/libwma-mp368k.patch` lo reemplaza por enteros replicando el redondeo de IEEE;
+**verificado idéntico byte a byte al original con float**. No usa `malloc` (arreglos estáticos, ~150 KB de datos); se le dieron cabeceras de
+reemplazo mínimas del entorno de Rockbox (`third_party/patches/libwma_shim/`). El contenedor lo lee `src/asfparse.c` (propio, a partir de
+la especificación y del enfoque de libasf): cabecera, etiquetas, paquetes de longitud variable y objetos partidos entre paquetes; la
+búsqueda es por hora de envío con un paquete de margen y salto exacto con la hora de presentación del primer objeto (error < 1 ms).
+**Medido en el PC contra `ffmpeg`, en 5 formatos** (v2 estéreo 44,1/48 kHz, mono 22,05/16 kHz, v1 44,1 kHz): **1 LSB de error máximo**,
+mismos bytes en 32 y 64 bits y el mismo CRC como 68040 big-endian bajo QEMU. Dos particularidades de la biblioteca, medidas: la **polaridad
+de su salida está invertida** (inaudible; se corrige) y los **2 primeros cuadros de MDCT son arranque** del decodificador (ffmpeg los
+descarta; el códec también). **WMA v1 con exponentes LSP** (p. ej. v1 a 32 kHz y 96 kbps): la forma de onda es idéntica (correlación
+1,0000) pero la amplitud sale ~0,2 dB baja (SNR 31 dB); es de las tablas de baja precisión de la biblioteca, no del parche (la versión
+original con float da exactamente lo mismo). El hilo de MPlayer-dev que reportaba ruido **no se reprodujo** con archivos de `ffmpeg`. Límites:
+solo v1 y v2 (Pro, Voice, Lossless y DRM se rechazan con "formato no soportado"), hasta 2 canales y de 8 a 48 kHz. **Tiempo real en el LC
+580: sin medir** (puede no alcanzar).
 
 **Consecuencias.** Más memoria y más código, lo que agrava la regla de 32 KB por segmento. Tremor y WMA pueden asignar
-memoria durante la decodificación: hay que revisarlo contra las reglas 6 y 7. Vorbis y WMA pueden no alcanzar tiempo real
+memoria durante la decodificación: se resolvió con un heap dentro del arena (regla 6). Vorbis y WMA pueden no alcanzar tiempo real
 en el 68LC040 (sin medir). El código WMA deriva de ingeniería inversa: revisar antes de distribuir binarios.
 
 ## ADR-010 — QuickTime como respaldo para los demás formatos
@@ -286,6 +319,49 @@ tabla de colores del sistema, no con un `PICT`. `tools/set_bundle_bit.py` activa
 El resultado depende del juicio de Víctor sobre el diseño a 32×32.
 
 **Revisar si** los colores salen mal en el Finder o el ícono no aparece.
+
+## ADR-014 — Núcleos en ensamblador 68040, probados bajo QEMU
+
+**Contexto.** Víctor pidió pasar a asm lo crítico de la decodificación (ADR-008: referencia en C, prueba bit a bit, selector C/asm,
+"sin medir"). El 68040 real solo lo ve Víctor, así que hacía falta una forma de probar la **corrección** aquí.
+
+**Decisión.** Un banco bajo `qemu-m68k -cpu m68040` (`targets/asm-test.sh`): ELF estático autónomo, compilado con el GCC de Retro68 y
+enlazado con su `ld` (emulación `m68kelf`), con un `_start` propio y llamadas al sistema de Linux por `trap #0`; no se instaló ningún
+cross-compilador. Cada núcleo se compara bit a bit con su referencia en C con vectores aleatorios y de borde, y se comprueba que
+preserve `d2-d7/a2-a6`. Además, decodificaciones **completas** corren como 68040 big-endian y su CRC se compara con el del PC.
+El selector es `-DMP368K_ASM=ON|OFF`; con asm activo se arma también `codecbench_ref` con la libmad original para compararlos en el mismo equipo.
+
+**Núcleos hechos (MP3).** Todos reproducen **exactamente** la aritmética de libmad con `FPM_64BIT`: cada producto es `(int32)((int64)x*y >> n)`,
+truncado, y las sumas son de 32 bits con envoltura. **`n` es 16, no 28, en la ventana de síntesis:** en `synth.c`, sin `OPT_SSO`, la tabla D va
+pre-desplazada 12 bits y `MAD_F_SCALEBITS` pasa a 28 − 12 (el DCT32 y la IMDCT usan 28); una primera referencia con 28 dio otro PCM y la
+prueba lo delató. Acumular en 64 bits y desplazar una sola vez sería más rápido pero cambiaría el PCM en el último bit: **no se hizo** y
+queda como decisión futura de Víctor.
+- `targets/asm/synth_window_040.s` (a mano): la ventana de la síntesis completa (de `synth_full`). Acumula por separado la parte alta y
+  `lo >>> 16` de cada `muls.l` y las junta al final, lo que ahorra el armado de cada producto de 64 bits.
+- `targets/asm/dct32_040.s` y `imdct_l_040.s` (**generados** por `targets/asm/gen/dflow.py`): el DCT32 y la IMDCT de bloques largos normales
+  (con ventana, solapado e inversión de frecuencias). Se parte del texto de libmad: las sentencias del `dct32` se leen de `synth.c`, y el
+  algoritmo de la IMDCT se transcribe al DSL del generador con las constantes leídas de `layer3.c`; la referencia en C (`src/dct32_ref.c`,
+  `src/imdct_ref.c`) sale del mismo texto. Asignación de registros con derrame a la pila, sin trabajo a mano.
+- `targets/asm/pcm_040.s` (a mano): conversión de la salida de la síntesis a 16 bits, a 8 bits y ganancia.
+Los bloques de inicio, fin, cortos y mixtos, y la IMDCT corta, siguen en C (se llaman al núcleo solo en el caso común).
+
+**Verificación (todo en el PC, bajo QEMU).** 48 064 + 32 032 + 12 008 casos aleatorios contra las referencias; **mutantes** (una constante
+cambiada en 1, un desplazamiento, un signo) hacen fallar cada prueba; síntesis completa de 4 MP3 (estéreo, mono y transitorios, **en perfil
+completo y media tasa**) con el mismo CRC que la libmad original del PC. Tremor y WMA corren como 68040 big-endian con el mismo CRC que en x86.
+
+**Lo que NO se hizo, y por qué.**
+- **FLAC en asm: descartado.** Se compiló la predicción LPC con el GCC de Retro68 y sale justo lo que se escribiría a mano (tabla de saltos y
+  `move.l`, `muls.l` con memoria, `add.l` por coeficiente): no hay ganancia que justifique el riesgo. Reemplazar el conteo de ceros de dr_flac por
+  `bfffo` podría ser **más lento** que su tabla en el caso habitual de códigos Rice cortos: solo se decide midiendo en el LC 580.
+- **Vorbis y WMA en asm: pendiente.** Tremor y libwma corren en C. Sus candidatos son la IMDCT (FFT con bucles de tamaño variable, que el
+  generador de código recto no cubre) y el ecualizador por coeficientes; se decide con las mediciones de `codecbench`.
+- Huffman, requantización y la IMDCT corta del MP3: segunda tanda.
+
+**Consecuencias.** El código crece (en `mp368k`, de 197 a 283 KB de CODE con Vorbis y WMA; el segmento Main supera el 226 KB que `segtest`
+probó en Infinite Mac). Los núcleos generados se regeneran con `targets/asm/gen/gen_*.py` si cambia libmad. **Sin medir en el LC 580:
+ningún núcleo se declara más rápido que la referencia.** QEMU no modela tiempos ni cachés: solo prueba corrección.
+
+**Revisar cuando** haya mediciones: un núcleo que no ayuda vuelve a C (el selector lo permite).
 
 ## Plantilla para nuevas decisiones
 

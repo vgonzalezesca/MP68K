@@ -1,0 +1,42 @@
+--- a/layer3.c
++++ b/layer3.c
+@@ -44,6 +44,11 @@
+ # include "frame.h"
+ # include "huffman.h"
+ # include "layer3.h"
++
++/* mp368k: IMDCT de bloques largos en un núcleo aparte (asm 68040), ver src/synth_kernels.h */
++# if defined(MP368K_IMDCT_L)
++#  include "synth_kernels.h"
++# endif
+ # include "mp368k_eq.h"
+ 
+ /* --- Layer III ----------------------------------------------------------- */
+@@ -2462,6 +2467,13 @@
+ 
+ 	/* long blocks */
+ 	for (sb = 0; sb < 2; ++sb, l += 18) {
++#if defined(MP368K_IMDCT_L)
++	  if (block_type == 0) {
++	    /* sin inversión aquí: III_freqinver(sample, 1) corre después, como antes */
++	    MP368K_IMDCT_L((const int32_t *)&xr[ch][l], (int32_t *)(*frame->overlap)[ch][sb], (int32_t *)&sample[0][sb], 0);
++	    continue;
++	  }
++#endif
+ 	  III_imdct_l(&xr[ch][l], output, block_type);
+ 	  III_overlap(output, (*frame->overlap)[ch][sb], sample, sb);
+ 	}
+@@ -2487,6 +2499,13 @@
+       if (channel->block_type != 2) {
+ 	/* long blocks */
+ 	for (sb = 2; sb < sblimit; ++sb, l += 18) {
++#if defined(MP368K_IMDCT_L)
++	  if (channel->block_type == 0) {
++	    /* el núcleo también invierte las frecuencias de las subbandas impares */
++	    MP368K_IMDCT_L((const int32_t *)&xr[ch][l], (int32_t *)(*frame->overlap)[ch][sb], (int32_t *)&sample[0][sb], sb & 1);
++	    continue;
++	  }
++#endif
+ 	  III_imdct_l(&xr[ch][l], output, channel->block_type);
+ 	  III_overlap(output, (*frame->overlap)[ch][sb], sample, sb);
+ 

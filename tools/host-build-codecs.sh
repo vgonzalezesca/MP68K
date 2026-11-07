@@ -17,8 +17,8 @@ mkdir -p "$B/cod"
 
 LIB=(bit fixed frame huffman layer12 layer3 stream synth timer version)
 # MP368K_SYNTH_KERNEL=off compila la síntesis original de libmad (para comparar contra el núcleo de referencia).
-SYNTH_DEF=(-DMP368K_SYNTH_WINDOW=mp368k_synth_window_full_ref -DMP368K_DCT32=mp368k_dct32_ref)
-SYNTH_SRC=(src/synth_ref.c src/dct32_ref.c)
+SYNTH_DEF=(-DMP368K_SYNTH_WINDOW=mp368k_synth_window_full_ref -DMP368K_DCT32=mp368k_dct32_ref -DMP368K_IMDCT_L=mp368k_imdct_l_ref)
+SYNTH_SRC=(src/synth_ref.c src/dct32_ref.c src/imdct_ref.c)
 if [[ ${MP368K_SYNTH_KERNEL:-on} == off ]]; then SYNTH_DEF=(); SYNTH_SRC=(); fi
 OURS=(src/decoder_core.c src/eq.c "${SYNTH_SRC[@]}" src/arena.c src/codec.c src/codec_mp3.c src/codec_flac.c src/vorbiscomment.c
       src/id3.c src/mp3info.c tests/host/test_codecs.c)

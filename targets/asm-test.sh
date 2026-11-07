@@ -15,7 +15,7 @@ RETRO68_BUILD=${RETRO68_BUILD:-$HOME/Retro68-build}
 BIN=$RETRO68_BUILD/toolchain/bin
 OUT=$ROOT/build/asmtest
 QEMU=${QEMU:-qemu-m68k}
-CFLAGS=(-m68040 -msoft-float -O2 -fomit-frame-pointer -ffreestanding -fno-builtin -fno-stack-protector
+CFLAGS=(-m68040 -msoft-float -O2 -fomit-frame-pointer -ffreestanding -fno-builtin -fno-stack-protector -fwrapv
         -Wall -Wextra -Wno-unused-parameter -I"$ROOT/src" -I"$ROOT/tests/asm")
 
 command -v "$QEMU" >/dev/null || { echo "asm-test: falta $QEMU (sudo pacman -S qemu-user)" >&2; exit 2; }
@@ -28,10 +28,10 @@ LD=$BIN/m68k-apple-macos-ld.real
 LIBGCC=$("$GCC" -m68040 -msoft-float -print-libgcc-file-name)
 
 # prueba : fuentes C de la referencia : fuentes asm del kernel
-declare -A REF=( [synth_window]="src/synth_ref.c" )
-declare -A ASM=( [synth_window]="targets/asm/synth_window_040.s" )
+declare -A REF=( [synth_window]="src/synth_ref.c" [dct32]="src/dct32_ref.c" )
+declare -A ASM=( [synth_window]="targets/asm/synth_window_040.s" [dct32]="targets/asm/dct32_040.s" )
 TESTS=("$@")
-[[ ${#TESTS[@]} -gt 0 ]] || TESTS=(synth_window mp3_e2e)
+[[ ${#TESTS[@]} -gt 0 ]] || TESTS=(synth_window dct32 mp3_e2e)
 
 "$AS" -m68040 "$ROOT/tests/asm/start.s" -o "$OUT/start.o"
 "$AS" -m68040 "$ROOT/tests/asm/shim.s" -o "$OUT/shim.o"
@@ -54,31 +54,31 @@ mp3_e2e() {
     gcc -O2 -w -DMP368K_HOSTREF -DNDEBUG -DHAVE_LIMITS_H -DFPM_64BIT -DSIZEOF_INT=4 -DSIZEOF_LONG=8 -DSIZEOF_LONG_LONG=8 \
         -I"$OUT/madh64" -I"$mad" "${srcs[@]}" "$ROOT/tests/asm/test_mp3_e2e.c" -o "$OUT/e2e_host"
     (cd "$ROOT" && "$OUT/e2e_host" "${files[@]}") > "$OUT/e2e_host.txt"
-    local rc_e2e=0
-    for v in ref:mp368k_synth_window_full_ref:src/synth_ref.c asm:mp368k_synth_window_full_040:targets/asm/synth_window_040.s; do
-        IFS=: read -r name f kernel <<<"$v"
+    local rc_e2e=0 defs kern
+    for v in "ref|-DMP368K_SYNTH_WINDOW=mp368k_synth_window_full_ref -DMP368K_DCT32=mp368k_dct32_ref|src/synth_ref.c src/dct32_ref.c" \
+             "asm|-DMP368K_SYNTH_WINDOW=mp368k_synth_window_full_040 -DMP368K_DCT32=mp368k_dct32_040|targets/asm/synth_window_040.s targets/asm/dct32_040.s"; do
+        IFS='|' read -r name defs kern <<<"$v"
         objs=("$OUT/start.o" "$OUT/shim.o" "$OUT/minilibc_$name.o")
         "$GCC" "${CFLAGS[@]}" -c "$ROOT/tests/asm/minilibc.c" -o "$OUT/minilibc_$name.o"
         for s in "${lib[@]}"; do
             o=$OUT/madlib_${name}_$s.o
-            "$GCC" -m68040 -msoft-float -O2 -fomit-frame-pointer -ffreestanding -fno-builtin -w -DNDEBUG -DHAVE_LIMITS_H \
-                -DFPM_64BIT -DSIZEOF_INT=4 -DSIZEOF_LONG=4 -DSIZEOF_LONG_LONG=8 -DMP368K_SYNTH_WINDOW="$f" \
+            "$GCC" -m68040 -msoft-float -O2 -fomit-frame-pointer -ffreestanding -fno-builtin -fwrapv -w -DNDEBUG -DHAVE_LIMITS_H \
+                -DFPM_64BIT -DSIZEOF_INT=4 -DSIZEOF_LONG=4 -DSIZEOF_LONG_LONG=8 $defs \
                 -I"$OUT/madh32" -I"$mad" -I"$ROOT/src" -c "$mad/$s.c" -o "$o"
             objs+=("$o")
         done
         "$GCC" "${CFLAGS[@]}" -I"$OUT/madh32" -c "$ROOT/tests/asm/test_mp3_e2e.c" -o "$OUT/e2e_$name.o"; objs+=("$OUT/e2e_$name.o")
-        if [[ $kernel == *.c ]]; then
-            "$GCC" "${CFLAGS[@]}" -c "$ROOT/$kernel" -o "$OUT/e2e_k_$name.o"
-        else
-            "$AS" -m68040 "$ROOT/$kernel" -o "$OUT/e2e_k_$name.o"
-        fi
-        objs+=("$OUT/e2e_k_$name.o")
+        for k in $kern; do
+            o=$OUT/e2e_k_${name}_$(basename "$k" | tr . _).o
+            if [[ $k == *.c ]]; then "$GCC" "${CFLAGS[@]}" -c "$ROOT/$k" -o "$o"; else "$AS" -m68040 "$ROOT/$k" -o "$o"; fi
+            objs+=("$o")
+        done
         "$LD" -m m68kelf -static -nostdlib -Ttext=0x80000000 -e _start "${objs[@]}" "$LIBGCC" -o "$OUT/e2e_$name"
         (cd "$ROOT" && "$QEMU" -cpu m68040 "$OUT/e2e_$name" "${files[@]}") > "$OUT/e2e_$name.txt"
         if diff -u "$OUT/e2e_host.txt" "$OUT/e2e_$name.txt" >"$OUT/e2e_$name.diff"; then
-            echo "  OK    kernel $name: CRC de la sintesis igual al de libmad original en ${#files[@]} archivos"
+            echo "  OK    nucleos $name: CRC de la sintesis igual al de libmad original en ${#files[@]} archivos"
         else
-            echo "  FALLA kernel $name:"; cat "$OUT/e2e_$name.diff"; rc_e2e=1
+            echo "  FALLA nucleos $name:"; cat "$OUT/e2e_$name.diff"; rc_e2e=1
         fi
     done
     cat "$OUT/e2e_host.txt"

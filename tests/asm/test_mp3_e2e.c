@@ -100,7 +100,7 @@ static void report(const char *name, unsigned frames, uint32_t crc)
 #endif
 }
 
-static int decode_one(const char *path)
+static int decode_one(const char *path, int half)
 {
     long n = read_file(path, filebuf, MAX_FILE);
     unsigned frames = 0, c, i;
@@ -111,6 +111,7 @@ static int decode_one(const char *path)
     mad_stream_init(&stream);
     mad_frame_init(&frame);
     mad_synth_init(&synth);
+    stream.options = half ? MAD_OPTION_HALFSAMPLERATE : 0;
     mad_stream_buffer(&stream, filebuf, (unsigned long)n);
     for (;;) {
         if (mad_frame_decode(&frame, &stream)) {
@@ -132,7 +133,8 @@ static int decode_one(const char *path)
     mad_synth_finish(&synth);
     mad_frame_finish(&frame);
     mad_stream_finish(&stream);
-    report(path, frames, ~crc);
+    report(half ? "half" : "full", frames, ~crc);
+    (void)path;
     return 0;
 }
 
@@ -142,6 +144,10 @@ int main(int argc, char **argv)
 
     crc_init();
     for (i = 1; i < argc; i++)
-        rc |= decode_one(argv[i]);
+    {
+        report(argv[i], 0, 0);
+        rc |= decode_one(argv[i], 0);
+        rc |= decode_one(argv[i], 1);
+    }
     return rc;
 }

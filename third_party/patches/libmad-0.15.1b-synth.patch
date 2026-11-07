@@ -1,0 +1,36 @@
+--- a/synth.c	2026-11-07 18:16:18.045816658 -0300
++++ b/synth.c	2026-11-07 18:16:18.058117388 -0300
+@@ -29,6 +29,11 @@
+ # include "frame.h"
+ # include "synth.h"
+ 
++/* mp368k: ventana de la síntesis completa en un núcleo aparte (C de referencia o asm 68040) */
++# if defined(MP368K_SYNTH_WINDOW)
++#  include "synth_kernels.h"
++# endif
++
+ /*
+  * NAME:	synth->init()
+  * DESCRIPTION:	initialize synth struct
+@@ -578,6 +583,12 @@
+ 
+       pe = phase & ~1;
+       po = ((phase - 1) & 0xf) | 1;
++#if defined(MP368K_SYNTH_WINDOW)
++      /* mp368k: las 32 muestras del slot salen del núcleo; mismas cuentas que el bloque de abajo */
++      MP368K_SYNTH_WINDOW(&(*filter)[0][~phase & 1][0][0], &(*filter)[0][phase & 1][0][0],
++                          &(*filter)[1][~phase & 1][0][0], &D[0][0], pe, po, pcm1);
++      pcm1 += 32;
++#else
+ 
+       /* calculate 32 samples */
+ 
+@@ -681,6 +692,8 @@
+       *pcm1 = SHIFT(-MLZ(hi, lo));
+       pcm1 += 16;
+ 
++#endif
++
+       phase = (phase + 1) % 16;
+     }
+   }

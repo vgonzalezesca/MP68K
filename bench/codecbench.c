@@ -38,7 +38,10 @@
 #define MIN_STACK       (24L * 1024)
 #define ARENA_BYTES     (256L * 1024)
 #define BUF_BYTES       (32L * 1024)
-#define OUT_NAME        "bench_results_codecs.txt"
+#ifndef CODECBENCH_OUT_NAME
+#define CODECBENCH_OUT_NAME "bench_results_codecs.txt"
+#endif
+#define OUT_NAME        CODECBENCH_OUT_NAME
 #define REF_NAME        "REFERENCE_CODECS.txt"
 
 static const char *const kFiles[] = {
@@ -341,6 +344,9 @@ int main(void)
     textlog_init();
     textlog_printf("# MP368K bench\n");
     textlog_printf("build: %s %s %s %s\n", MP368K_BUILD_ID, __DATE__, __TIME__, MP368K_BUILD_FLAGS);
+#ifdef MP368K_SYNTH_KERNEL_LABEL
+    textlog_printf("synth_kernel: %s\n", MP368K_SYNTH_KERNEL_LABEL);
+#endif
     textlog_printf("machine: mach=%ld proc=%ld fpu=%ld sysv=0x%lX ram_kb=%ld\n",
                    gestalt_val(gestaltMachineType), gestalt_val(gestaltProcessorType),
                    gestalt_val(gestaltFPUType), (unsigned long)gestalt_val(gestaltSystemVersion),

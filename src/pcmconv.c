@@ -1,35 +1,17 @@
 /*
- * pcmconv — ver pcmconv.h.
+ * pcmconv — ver pcmconv.h. El trabajo lo hace el núcleo elegido por el build (src/pcm_kernels.h):
+ * la referencia en C (src/pcm_ref.c) o, en la rama 68k, el asm.
  */
 #include "pcmconv.h"
+#include "pcm_kernels.h"
 
 void pcm_s16_to_u8(const int16_t *src, uint8_t *dst, unsigned long n)
 {
-    unsigned long i;
-
-    for (i = 0; i < n; i++) {
-        long v = ((long)src[i] + 128) >> 8;     /* redondeo; floor para negativos */
-
-        if (v > 127)
-            v = 127;
-        dst[i] = (uint8_t)(v + 128);
-    }
+    MP368K_PCM_U8(src, dst, n);
 }
 
 void pcm_apply_gain16(const int16_t *src, int16_t *dst, unsigned long n,
                       unsigned channels, unsigned gl, unsigned gr)
 {
-    unsigned long i;
-
-    if (gl > 256) gl = 256;
-    if (gr > 256) gr = 256;
-    if (channels == 1) {
-        for (i = 0; i < n; i++)
-            dst[i] = (int16_t)(((long)src[i] * (long)gl) >> 8);
-        return;
-    }
-    for (i = 0; i + 1 < n; i += 2) {
-        dst[i] = (int16_t)(((long)src[i] * (long)gl) >> 8);
-        dst[i + 1] = (int16_t)(((long)src[i + 1] * (long)gr) >> 8);
-    }
+    MP368K_PCM_GAIN16(src, dst, n, channels, gl, gr);
 }

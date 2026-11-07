@@ -14,7 +14,7 @@ srcs=(); for f in "${LIB[@]}"; do srcs+=("$MAD/$f.c"); done
 
 gcc -O2 -Wall -w -DNDEBUG -DHAVE_LIMITS_H -DFPM_64BIT -DSIZEOF_INT=4 -DSIZEOF_LONG=8 -DSIZEOF_LONG_LONG=8 \
     -I"$B/libmad" -I"$MAD" -I"$ROOT/src" "${srcs[@]}" \
-    "$ROOT/src/decoder_core.c" "$ROOT/src/ring.c" "$ROOT/src/pcmconv.c" \
+    "$ROOT/src/decoder_core.c" "$ROOT/src/ring.c" "$ROOT/src/pcmconv.c" "$ROOT/src/pcm_ref.c" \
     "$ROOT/tests/host/test_units.c" -o "$B/test_units"
 
 rc=0

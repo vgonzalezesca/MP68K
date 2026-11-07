@@ -2,6 +2,9 @@
  * decoder_core — ver decoder_core.h.
  */
 #include "decoder_core.h"
+#if defined(MP368K_PCM_SCALE16)
+# include "pcm_kernels.h"
+#endif
 
 #include <mad.h>
 
@@ -93,6 +96,7 @@ uint32_t dec_crc32(const uint8_t *data, size_t size)
 }
 
 /* Redondeo y saturación a 16 bits, igual que scale() de minimad.c de libmad. */
+#if !defined(MP368K_PCM_SCALE16)
 static int16_t scale16(mad_fixed_t sample)
 {
     sample += (1L << (MAD_F_FRACBITS - 16));
@@ -104,6 +108,7 @@ static int16_t scale16(mad_fixed_t sample)
 
     return (int16_t)(sample >> (MAD_F_FRACBITS + 1 - 16));
 }
+#endif
 
 /* Longitud total de una etiqueta ID3v2 cuyos primeros 10 bytes son `d` (0 si no hay). */
 static size_t id3v2_total(const uint8_t *d)
@@ -142,12 +147,20 @@ static void step_mix(int want_mono)
 static unsigned step_convert(void)
 {
     unsigned nch = sSynth.pcm.channels, len = sSynth.pcm.length;
+
+#if defined(MP368K_PCM_SCALE16)
+    /* núcleo aparte (referencia en C o asm 68040, src/pcm_kernels.h): mismas cuentas que el bucle de abajo */
+    MP368K_PCM_SCALE16((const int32_t *)sSynth.pcm.samples[0], (const int32_t *)sSynth.pcm.samples[nch > 1 ? 1 : 0],
+                       (int16_t *)sPcm, len, nch);
+    return len * nch;
+#else
     unsigned count = 0, i, ch;
 
     for (i = 0; i < len; i++)
         for (ch = 0; ch < nch; ch++)
             sPcm[count++] = scale16(sSynth.pcm.samples[ch][i]);
     return count;
+#endif
 }
 
 static void mix_to_mono(struct mad_frame *frame)

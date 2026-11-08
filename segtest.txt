@@ -1,0 +1,1 @@
+# MP368K segtestbuild: 68k-6a1e019-mod Nov  6 2026 15:17:20 -m68040 -msoft-float -O2 -fomit-frame-pointer -ffunction-sections -fdata-sectionsfunciones: 700, rondas: 3rango de direcciones de las funciones: 0x07C59BE2 - 0x07C5B1CA (5608 bytes)resultado: 0x78B77989  esperado: 0x78B77989RESULTADO: OK

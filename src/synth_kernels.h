@@ -31,6 +31,16 @@ void mp368k_synth_window_full_040(const int32_t *fx, const int32_t *fe, const in
                                   const int32_t *D, unsigned int pe, unsigned int po, int32_t *pcm);
 
 /*
+ * Ventana de la síntesis de MEDIA TASA (synth_half de libmad): las mismas cuentas que la completa pero solo para las subbandas pares
+ * (sb = 0, 2, ..., 14 y 16); salen 16 muestras en pcm[0..15]: pcm[0], luego pcm[sb/2] y pcm[16 - sb/2] por cada sb par de 2 a 14, y pcm[8].
+ * Mismos argumentos y misma aritmética (>> 16, suma de 32 bits) que la completa.
+ */
+void mp368k_synth_window_half_ref(const int32_t *fx, const int32_t *fe, const int32_t *fo,
+                                  const int32_t *D, unsigned int pe, unsigned int po, int32_t *pcm);
+void mp368k_synth_window_half_040(const int32_t *fx, const int32_t *fe, const int32_t *fo,
+                                  const int32_t *D, unsigned int pe, unsigned int po, int32_t *pcm);
+
+/*
  * DCT de 32 puntos (el dct32 de libmad): in[32] -> lo[i][slot] y hi[i][slot], i = 0..15, con lo/hi de [16][8].
  * Aritmética de 32 bits con envoltura; cada producto es (int32)(((int64)x*y) >> 28). Referencia GENERADA
  * (src/dct32_ref.c) y kernel asm GENERADO (targets/asm/dct32_040.s) desde el mismo texto de libmad.

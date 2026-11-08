@@ -79,6 +79,15 @@ Otros formatos (6-68K; lista completa en `docs/SPECS_68K.md`): residuos Rice y L
 piso de Vorbis; IMDCT de WMA; ganancia por coeficiente del EQ. Elegir la estrategia tras leer el código real de
 cada biblioteca (skill `audio-formats`).
 
+## Antes de escribir un kernel: medir y aplicar la compuerta (ADR-014)
+1. `targets/asm-prof.sh [caso]` da las instrucciones dinámicas por función bajo QEMU, en costo marginal (**conteo, no tiempo**). Casos: `mp3 mp3half mp3orig mp3eq vorbis wma2 ...`.
+   Si una función aparece como `?`, es asm sin tipo de función: el script la resuelve con `nm`.
+2. **Compuerta:** que pese ≥ ~8 % de su formato y que un diseño concreto quite ≥ ~25 % de las instrucciones del bucle frente a GCC (compilar con `-S -O2 -m68040` y contar).
+   Lo que no pase se anota como descartado, con su conteo, en ADR-014 (FLAC, `III_aliasreduce`, `mdct_unroll_lap`...).
+3. **Las multiplicaciones mandan:** `muls.l` 32×32→64 es lo caro del 040 y un kernel que no reduce multiplicaciones mejora poco. El costo real está **sin medir**: correr `microbench`
+   en el LC 580 antes de seguir invirtiendo.
+4. Tras escribirlo: prueba unitaria bit a bit **y `targets/asm-mutate.sh <prueba> '<sed>' ...`** (cada mutante debe fallar; falla si el sed no cambió el archivo), y el e2e que corresponda.
+
 ## Pruebas bit a bit
 - `tests/test_<k>.c` genera vectores con semilla fija, ejecuta referencia y asm, y
   compara **todos** los resultados. Falla con índice, entrada, esperado y obtenido.

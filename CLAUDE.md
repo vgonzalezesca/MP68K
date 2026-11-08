@@ -10,8 +10,8 @@ Reproductor personal (uso propio, GPL) con dos equipos de referencia, en dos bif
 
 **Estado real:** el reproductor de MP3 en 68k existe y se probó en emulador. FLAC y la capa de códecs se validaron en el
 emulador (`codecbench`: el PCM coincide con el PC). Compilados y probados **solo en el PC y bajo QEMU** (no en un Mac): el ecualizador
-del MP3, **Ogg Vorbis (Tremor) y WMA (libwma)** con PCM a 1 LSB de `ffmpeg`, y los **núcleos en asm 68040 del MP3** (síntesis, DCT32, IMDCT
-larga, PCM; ADR-014), que dan el mismo PCM que la libmad original. **Nada de esto se vio funcionar en un Mac ni se midió en el LC 580.**
+del MP3, **Ogg Vorbis (Tremor) y WMA (libwma)** con PCM a 1 LSB de `ffmpeg`, y los **núcleos en asm 68040** (MP3: síntesis completa y de media tasa, DCT32, IMDCT
+larga, PCM, ganancia del EQ; WMA: conversión de salida; ADR-014), que dan el mismo PCM que el C. Con ellos el MP3 gasta ~25-29 % menos instrucciones (conteo bajo QEMU, no tiempo). **Nada de esto se vio funcionar en un Mac ni se midió en el LC 580.**
 PPC compila `sysprobe` y nada más; QuickTime es la etapa 6 y **no está hecho** (`docs/ETAPA6.md`).
 
 Objetivo: MP3 hasta 192 kbps estéreo, FLAC, Ogg Vorbis, WMA y otros formatos vía QuickTime, con la mayor

@@ -1,11 +1,11 @@
---- a/synth.c	2026-11-07 18:35:43.645470293 -0300
-+++ b/synth.c	2026-11-07 18:35:43.655214050 -0300
+--- a/synth.c	2026-11-08 15:45:51.149370062 -0300
++++ b/synth.c	2026-11-08 15:45:51.162435671 -0300
 @@ -29,6 +29,11 @@
  # include "frame.h"
  # include "synth.h"
  
 +/* mp368k: ventana de la síntesis y DCT32 en núcleos aparte (C de referencia o asm 68040) */
-+# if defined(MP368K_SYNTH_WINDOW) || defined(MP368K_DCT32)
++# if defined(MP368K_SYNTH_WINDOW) || defined(MP368K_SYNTH_WINDOW_HALF) || defined(MP368K_DCT32)
 +#  include "synth_kernels.h"
 +# endif
 +
@@ -44,7 +44,7 @@
        phase = (phase + 1) % 16;
      }
    }
-@@ -710,8 +728,13 @@
+@@ -710,11 +728,22 @@
      pcm1     = synth->pcm.samples[ch];
  
      for (s = 0; s < ns; ++s) {
@@ -58,3 +58,21 @@
  
        pe = phase & ~1;
        po = ((phase - 1) & 0xf) | 1;
++#if defined(MP368K_SYNTH_WINDOW_HALF)
++      /* mp368k: las 16 muestras del slot salen del núcleo; mismas cuentas que el bloque de abajo */
++      MP368K_SYNTH_WINDOW_HALF((const int32_t *)&(*filter)[0][~phase & 1][0][0], (const int32_t *)&(*filter)[0][phase & 1][0][0],
++                          (const int32_t *)&(*filter)[1][~phase & 1][0][0], (const int32_t *)&D[0][0], pe, po, (int32_t *)pcm1);
++      pcm1 += 16;
++#else
+ 
+       /* calculate 16 samples */
+ 
+@@ -820,6 +849,8 @@
+       *pcm1 = SHIFT(-MLZ(hi, lo));
+       pcm1 += 8;
+ 
++#endif
++
+       phase = (phase + 1) % 16;
+     }
+   }

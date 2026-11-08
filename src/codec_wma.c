@@ -11,6 +11,7 @@
 #include <string.h>
 
 #include "asfparse.h"
+#include "pcm_kernels.h"
 #include "wmadec.h"
 
 #define MIN_RATE 8000
@@ -153,17 +154,10 @@ static int wma_open(const CodecIO *io, DecProfile prof, uint8_t *buf, size_t buf
     return CODEC_OK;
 }
 
-static int16_t to_pcm16(fixed32 v)
-{
-    fixed32 s = ((1 << (OUT_SHIFT - 1)) - v) >> OUT_SHIFT;      /* -v: polaridad */
-
-    return (int16_t)(s > 32767 ? 32767 : s < -32768 ? -32768 : s);
-}
-
 static int wma_next(DecFrame *out)
 {
     for (;;) {
-        unsigned n, i, c;
+        unsigned n;
 
         if (!sOpen)
             return -1;
@@ -171,9 +165,9 @@ static int wma_next(DecFrame *out)
             n = sOutN - sOutPos;
             if (n > CODEC_MAX_FRAMES)
                 n = CODEC_MAX_FRAMES;
-            for (i = 0; i < n; i++)
-                for (c = 0; c < sCh; c++)
-                    sPcm[i * sCh + c] = to_pcm16((*sDec.frame_out)[c][sOutPos + i]);
+            /* núcleo aparte (referencia en C o asm 68040, src/pcm_kernels.h): clamp((8192 - v) >> 14), intercalado */
+            MP368K_PCM_WMA16((const int32_t *)&(*sDec.frame_out)[0][sOutPos],
+                             (const int32_t *)&(*sDec.frame_out)[sCh > 1 ? 1 : 0][sOutPos], sPcm, n, sCh);
             sOutPos += n;
             out->pcm = sPcm;
             out->frames = n;

@@ -69,3 +69,55 @@ void mp368k_synth_window_full_ref(const int32_t *fx, const int32_t *fe, const in
         a += mulf(f[j], p[IDX(j)]);
     pcm[16] = (int32_t)(0u - a);
 }
+
+/* Media tasa (synth_half): solo las subbandas pares; las salidas van a pcm[sb/2] y pcm[16 - sb/2]. */
+void mp368k_synth_window_half_ref(const int32_t *fx, const int32_t *fe, const int32_t *fo,
+                                  const int32_t *D, unsigned int pe, unsigned int po, int32_t *pcm)
+{
+    unsigned int sb;
+    int j;
+    uint32_t a;
+    const int32_t *p, *f;
+
+    a = 0;
+    p = D + po;
+    for (j = 0; j < 8; j++)
+        a += mulf(fx[j], p[IDX(j)]);
+    a = 0u - a;
+    p = D + pe;
+    for (j = 0; j < 8; j++)
+        a += mulf(fe[j], p[IDX(j)]);
+    pcm[0] = (int32_t)a;
+
+    for (sb = 2; sb < 16; sb += 2) {
+        const int32_t *fer = fe + 8 * sb;
+        const int32_t *for_ = fo + 8 * (sb - 1);
+        const int32_t *row = D + 32 * sb;
+
+        a = 0;
+        p = row + po;
+        for (j = 0; j < 8; j++)
+            a += mulf(for_[j], p[IDX(j)]);
+        a = 0u - a;
+        p = row + pe;
+        for (j = 0; j < 8; j++)
+            a += mulf(fer[j], p[IDX(j)]);
+        pcm[sb / 2] = (int32_t)a;
+
+        a = 0;
+        p = row - pe;
+        for (j = 0; j < 8; j++)
+            a += mulf(fer[j], p[15 + 2 * j]);
+        p = row - po;
+        for (j = 0; j < 8; j++)
+            a += mulf(for_[j], p[15 + 2 * j]);
+        pcm[16 - sb / 2] = (int32_t)a;
+    }
+
+    f = fo + 8 * 15;
+    a = 0;
+    p = D + 32 * 16 + po;
+    for (j = 0; j < 8; j++)
+        a += mulf(f[j], p[IDX(j)]);
+    pcm[8] = (int32_t)(0u - a);
+}

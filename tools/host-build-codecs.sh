@@ -19,15 +19,15 @@ TREM=$B/tremor                  # Tremor (rama lowmem) con los cambios de MP368K
 
 LIB=(bit fixed frame huffman layer12 layer3 stream synth timer version)
 # MP368K_SYNTH_KERNEL=off compila la síntesis original de libmad (para comparar contra el núcleo de referencia).
-SYNTH_DEF=(-DMP368K_SYNTH_WINDOW=mp368k_synth_window_full_ref -DMP368K_DCT32=mp368k_dct32_ref -DMP368K_IMDCT_L=mp368k_imdct_l_ref)
-SYNTH_SRC=(src/synth_ref.c src/dct32_ref.c src/imdct_ref.c src/pcm_ref.c)
+SYNTH_DEF=(-DMP368K_SYNTH_WINDOW=mp368k_synth_window_full_ref -DMP368K_SYNTH_WINDOW_HALF=mp368k_synth_window_half_ref -DMP368K_DCT32=mp368k_dct32_ref -DMP368K_IMDCT_L=mp368k_imdct_l_ref)
+SYNTH_SRC=(src/synth_ref.c src/dct32_ref.c src/imdct_ref.c)
 PCM_DEF=(-DMP368K_PCM_SCALE16=mp368k_pcm_scale16_ref)
 if [[ ${MP368K_SYNTH_KERNEL:-on} == off ]]; then SYNTH_DEF=(); SYNTH_SRC=(); PCM_DEF=(); fi
 WMA=$B/libwma                   # libwma (Rockbox) con el float reemplazado y cabeceras de reemplazo (ADR-009)
 "$ROOT/tools/prepare-libwma.sh" "$WMA"
 WMA_LIB=(wmadeci wmafixed ffmpeg_bitstream mdct mdct_lookup fft-ffmpeg)
 TREM_LIB=(bitwise codebook dsp floor0 floor1 floor_lookup framing info mapping0 mdct misc res012 vorbisfile)
-OURS=(src/decoder_core.c src/eq.c src/heap.c src/codec_vorbis.c src/asfparse.c src/codec_wma.c "${SYNTH_SRC[@]}" src/arena.c src/codec.c src/codec_mp3.c src/codec_flac.c src/vorbiscomment.c
+OURS=(src/decoder_core.c src/eq.c src/eq_ref.c src/pcm_ref.c src/heap.c src/codec_vorbis.c src/asfparse.c src/codec_wma.c "${SYNTH_SRC[@]}" src/arena.c src/codec.c src/codec_mp3.c src/codec_flac.c src/vorbiscomment.c
       src/id3.c src/mp3info.c tests/host/test_codecs.c)
 
 build() {
@@ -54,7 +54,7 @@ build() {
     done
     gcc $flag "${objs[@]}" -o "$B/test_codecs$bits"
     # Prueba unitaria del ecualizador (no necesita libmad: define un gancho ficticio).
-    gcc "${common[@]}" -DMP368K_EQ_STATS -Wall -Wextra -Wno-unused-parameter "$ROOT/src/eq.c" "$ROOT/tests/host/test_eq.c" \
+    gcc "${common[@]}" -DMP368K_EQ_STATS -Wall -Wextra -Wno-unused-parameter "$ROOT/src/eq.c" "$ROOT/src/eq_ref.c" "$ROOT/tests/host/test_eq.c" \
         -lm -o "$B/test_eq$bits"
 }
 

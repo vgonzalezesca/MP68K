@@ -87,6 +87,28 @@ Modelo del equipo: por confirmar.
 | WMA v2 | 128 kbps |  |  | off | sin medir |
 | MP3 | 192 kbps estéreo |  |  | on | sin medir |
 
+## Conteo de instrucciones bajo QEMU (NO es tiempo)
+
+`targets/asm-prof.sh` ejecuta cada decodificador como 68040 bajo `qemu-m68k -d in_asm,exec,nochain` y cuenta las instrucciones dinámicas por función; se corre con dos
+largos y se resta (costo marginal: sin inicialización ni arnés de prueba). **Es una medición real de instrucciones ejecutadas, no de tiempo**: el 68040 real tiene
+instrucciones de costos muy distintos (`muls.l` 32×32→64, divisiones, saltos) y cachés de 4 KB que QEMU no modela. 2026-11-08, commit de esta ronda, 128 kbps salvo indicación.
+"Cuadro" = una muestra por canal (en estéreo, un par). Presupuesto a 44,1 kHz y 33 MHz: 748 ciclos por cuadro estéreo.
+
+| Caso | Instrucciones / cuadro | `mul*` / cuadro | Funciones más pesadas (% de instrucciones) |
+|---|---|---|---|
+| MP3 FULL, libmad original (C) | 604,8 | 48,9 | `synth_full` 51, `III_decode` 13, `III_imdct_l` 13, `dct32` 11 |
+| MP3 FULL, núcleos asm | **431,1** (−29 %) | 48,9 | ventana 41, IMDCT 19, `III_decode` 16, DCT32 13, `III_aliasreduce` 6 |
+| MP3 FULL 192 kbps, núcleos asm | 442,6 | 47,6 | ventana 40, IMDCT 20, `III_decode` 14, DCT32 12 |
+| MP3 FULL + EQ, núcleos asm | 466,7 | 50,8 | ventana 38, IMDCT 17, `III_decode` 14, DCT32 12; el EQ cuesta 35,5 (antes del kernel asm: 66,8) |
+| MP3 HALF, libmad original (C) | 456,8 | 32,9 | `synth_half` 35, `III_decode` 17, IMDCT 17, `dct32` 15 |
+| MP3 HALF, núcleos asm | **341,3** (−25 %) | 32,9 | ventana de media tasa 26 (88,5; en C eran 161,9), IMDCT 23, `III_decode` 20, DCT32 16 |
+| Ogg Vorbis estéreo (Tremor, C) | 473,7 | 29,8 | `mdct_backward` 38, `decode_map` 10, `decode_packed_entry_number` 9, `mdct_unroll_lap` 8 |
+| Ogg Vorbis mono (Tremor, C) | 252,6 | 15,0 | `mdct_backward` 35, `decode_packed_entry_number` 13, `decode_map` 11 |
+| WMA v2 estéreo (libwma, conversión a PCM en asm) | 364,7 (antes 379,7) | 25,0 | `wma_decode_block` 24, FFT (`pass`) 19, `ff_imdct_half` 16, `wma_window` 15 |
+| WMA v1 estéreo | 365,0 | 25,0 | igual que v2 |
+
+`memcpy`, `memmove`, `memset` y `qsort` de mp368k minilibc son bucles de bytes (más lentos que los de la libc real) y se separan en el informe.
+
 ## Registro cronológico
 
 ### 2026-11-08 — `codecbench` con los kernels asm, en emulador

@@ -29,6 +29,28 @@ void mp368k_pcm_scale16_ref(const int32_t *s0, const int32_t *s1, int16_t *out, 
     }
 }
 
+static int16_t wma16(int32_t v)
+{
+    int32_t s = (int32_t)(8192u - (uint32_t)v) >> 14;       /* -v + 2^13, con envoltura como el asm */
+
+    return (int16_t)(s > 32767 ? 32767 : s < -32768 ? -32768 : s);
+}
+
+void mp368k_pcm_wma16_ref(const int32_t *s0, const int32_t *s1, int16_t *out, unsigned int len, unsigned int nch)
+{
+    unsigned int i;
+
+    if (nch == 1) {
+        for (i = 0; i < len; i++)
+            out[i] = wma16(s0[i]);
+        return;
+    }
+    for (i = 0; i < len; i++) {
+        out[2 * i] = wma16(s0[i]);
+        out[2 * i + 1] = wma16(s1[i]);
+    }
+}
+
 void mp368k_pcm_u8_ref(const int16_t *src, uint8_t *dst, unsigned long n)
 {
     unsigned long i;

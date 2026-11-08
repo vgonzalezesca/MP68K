@@ -260,7 +260,7 @@ target_compile_options(wma PRIVATE -w -fwrapv)          # código de terceros: s
 # usa y se arma además una pila "_ref" con la libmad original para comparar las dos en el mismo equipo
 # (codecbench_ref). Selector de compilación: -DMP368K_ASM=OFF vuelve a C.
 function(mp368k_codec_stack SFX KERNEL_LABEL)
-    cmake_parse_arguments(K "" "" "SOURCES;DEFS;COREDEFS" ${ARGN})
+    cmake_parse_arguments(K "" "" "SOURCES;DEFS;COREDEFS;CODECDEFS" ${ARGN})
     add_library(mad_eq${SFX} STATIC
         ${MAD_EQ_DIR}/bit.c ${MAD_EQ_DIR}/fixed.c ${MAD_EQ_DIR}/frame.c ${MAD_EQ_DIR}/huffman.c
         ${MAD_EQ_DIR}/layer12.c ${MAD_EQ_DIR}/layer3.c ${MAD_EQ_DIR}/stream.c ${MAD_EQ_DIR}/synth.c
@@ -282,15 +282,18 @@ function(mp368k_codec_stack SFX KERNEL_LABEL)
     add_library(codecs${SFX} STATIC
         src/arena.c src/heap.c src/codec.c src/codec_mp3.c src/codec_flac.c src/codec_vorbis.c src/codec_wma.c src/asfparse.c
         src/vorbiscomment.c
-        src/id3.c src/mp3info.c src/eq.c src/dr_flac_impl.c)
+        src/id3.c src/mp3info.c src/eq.c src/eq_ref.c src/dr_flac_impl.c)
     target_include_directories(codecs${SFX} PUBLIC src ${DRFLAC_DIR})
     target_compile_definitions(codecs${SFX} PUBLIC MP368K_SYNTH_KERNEL_LABEL="${KERNEL_LABEL}")
+    if(K_CODECDEFS)
+        target_compile_definitions(codecs${SFX} PRIVATE ${K_CODECDEFS})
+    endif()
     target_link_libraries(codecs${SFX} PUBLIC decoder_core_eq${SFX} tremor wma)
 endfunction()
 
 if(MP368K_ASM AND MP368K_ASM_KERNEL_SOURCES)
     mp368k_codec_stack("" asm SOURCES ${MP368K_ASM_KERNEL_SOURCES} DEFS ${MP368K_ASM_KERNEL_DEFS}
-        COREDEFS ${MP368K_ASM_CORE_DEFS})
+        COREDEFS ${MP368K_ASM_CORE_DEFS} CODECDEFS ${MP368K_ASM_CODEC_DEFS})
     mp368k_codec_stack(_ref c)
     set(MP368K_HAVE_REF_STACK TRUE)
 else()

@@ -357,6 +357,29 @@ completo y media tasa**) con el mismo CRC que la libmad original del PC. Tremor 
   generador de código recto no cubre) y el ecualizador por coeficientes; se decide con las mediciones de `codecbench`.
 - Huffman, requantización y la IMDCT corta del MP3: segunda tanda.
 
+**Ronda 2 (2026-11-08): medir primero.** Víctor entregó el bench de `codecbench` en Infinite Mac: los 4 CRC de MP3 con los núcleos asm coinciden con el PC (primera
+confirmación en una build real de Mac OS 8.1 sobre un 68040 emulado); los tiempos son del emulador y no se interpretan (`docs/PERF_LOG.md`). Como no había ningún perfil
+del 68k de Vorbis, WMA ni del EQ, se hizo uno: **`targets/asm-prof.sh`** corre los decodificadores bajo QEMU con `-d in_asm,exec,nochain` (sin plugins instalados) y cuenta
+**instrucciones dinámicas por función**, en costo marginal (corrida larga menos corta) y sin el arnés de prueba. **Es un conteo de instrucciones, no tiempo.**
+- **Compuerta (para no repetir el caso de FLAC):** una función entra a asm solo si pesa ≥ ~8 % de su formato y un diseño concreto quita ≥ ~25 % de las instrucciones de
+  su bucle frente a lo que emite GCC. **Pasaron:** el kernel del ecualizador (GCC gastaba 33 instrucciones por línea; el asm, ~17 en promedio con líneas sin ganancia:
+  67 → 35 por cuadro), la conversión de salida de WMA (35 → 20), y la **ventana de la síntesis de media tasa** (`synth_half`, 162 → 89, −45 %), que resultó ser lo más pesado
+  del perfil HALF, el que probablemente use el LC 580 (`targets/asm/eq_040.s`, `pcm_040.s`, `synth_window_half_040.s`; todos con referencia en C, prueba bit a bit bajo QEMU,
+  **mutantes** con `targets/asm-mutate.sh` y e2e como 68040 big-endian). **No pasaron:** `III_aliasreduce` (con 2 productos por salida el truco de acumuladores partidos casi
+  no ahorra, ~−20 %); `mdct_unroll_lap` de Tremor (~−21 %); y las etapas de la MDCT de Tremor tomadas por separado (`XPROD31` ahorra una instrucción de ~9; ~−11 %).
+  Quedan sin tocar la MDCT de Tremor (38 % de Vorbis), la FFT y la IMDCT de libwma (≈ 40 % de WMA) y la lectura de bits de Huffman: son los candidatos que tendrían
+  más peso, pero cada uno exige una reescritura grande de bucles con muchos casos (tamaños de bloque) por un ahorro estimado menor del 30 % de su parte.
+- **Resultado (instrucciones por cuadro estéreo, `docs/PERF_LOG.md`):** MP3 FULL 605 → 431 (−29 %); MP3 HALF 457 → 341 (−25 %); WMA 380 → 365; MP3 con EQ 498 → 467.
+- **Lo que dicen estos números, con sus límites.** Los decodificadores de Vorbis y WMA estéreo gastan ~365-475 instrucciones por cuadro y el MP3 FULL ~431, contra un
+  presupuesto de 748 ciclos por cuadro a 44,1 kHz y 33 MHz, y hacen 25-50 multiplicaciones `muls.l` por cuadro. **Si `muls.l` cuesta ~20 ciclos en el 68LC040, lo
+  que dominaría son las multiplicaciones y varios de estos casos no llegarían a tiempo real; si cuesta ~5, quedarían al borde.** Ese dato **no lo sé**: la búsqueda
+  en la web no dio la tabla del M68040UM y el `microbench` solo se ha corrido en el emulador. **Lo primero que hay que medir en el LC 580 es `microbench`** (Etapa 1 de
+  `docs/PERF_LOG.md`): con eso el conteo se convierte en una estimación de ciclos creíble y se sabe si más asm sirve o si hace falta reducir trabajo (menos tasa, mono).
+- **Perfil rápido del MP3 (acumular en 64 bits y desplazar una vez): diferido.** Víctor lo aprobó con la premisa de que sería "bastante más rápido". Con los números, la
+  ventana pasaría de 5 a 4 instrucciones por producto (−20 % de la ventana, ~−8 % del MP3) y **no reduce las multiplicaciones**, que serían lo que domina: el beneficio de
+  velocidad sería pequeño y a cambio agrega un modo en la interfaz, en la escalera de Automático y en las pruebas. Se retoma si el `microbench` del LC 580 muestra que
+  `muls.l` es barato (entonces el conteo de instrucciones sí importa), o si Víctor lo quiere por la exactitud (el PCM sería más preciso, no menos).
+
 **Consecuencias.** El código crece (en `mp368k`, de 197 a 283 KB de CODE con Vorbis y WMA; el segmento Main supera el 226 KB que `segtest`
 probó en Infinite Mac). Los núcleos generados se regeneran con `targets/asm/gen/gen_*.py` si cambia libmad. **Sin medir en el LC 580:
 ningún núcleo se declara más rápido que la referencia.** QEMU no modela tiempos ni cachés: solo prueba corrección.

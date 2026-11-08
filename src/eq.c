@@ -5,7 +5,12 @@
 
 #include <string.h>
 
+#include "eq_kernels.h"
 #include "eq_tables.h"
+
+#if EQ_UNITY != EQ_UNITY_GAIN
+# error "eq_kernels.h y eq_tables.h no coinciden en la ganancia 1,0"
+#endif
 
 typedef signed int coef_t;      /* mad_fixed_t */
 
@@ -155,9 +160,8 @@ void eq_apply_granule(coef_t xr[576], unsigned int rate, int block)
         return;
 
     if (block == 0) {                               /* largo: la línea i es la frecuencia i */
-        for (i = sFirst; i <= sLast; i++)
-            if (sGain[i] != EQ_UNITY)
-                xr[i] = mulg(xr[i], sGain[i]);
+        /* núcleo aparte (referencia en C o asm 68040, src/eq_kernels.h): mismas cuentas que el bucle de los demás casos */
+        MP368K_EQ_MULG_RANGE((int32_t *)&xr[sFirst], (const int32_t *)&sGain[sFirst], (unsigned int)(sLast - sFirst + 1));
         return;
     }
 

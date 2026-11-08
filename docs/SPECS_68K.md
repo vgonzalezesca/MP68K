@@ -22,10 +22,10 @@ emulador sirve de guía débil, y conteos de instrucciones como estimación marc
 
 | Formato | Estado (2026-11-07) | Pendiente |
 |---|---|---|
-| MP3 | **hechos** (PC y QEMU, sin medir): ventana de síntesis (a mano), DCT32 e IMDCT larga (generados), conversión a PCM, 8 bits y ganancia (a mano) | requantización, Huffman, IMDCT corta y bloques de inicio/fin/mixtos |
+| MP3 | **hechos** (PC y QEMU, sin medir): ventana de síntesis completa y de **media tasa** (a mano), DCT32 e IMDCT larga (generados), conversión a PCM, 8 bits y ganancia (a mano), **ganancia del EQ** (a mano) | requantización, Huffman, IMDCT corta y bloques de inicio/fin/mixtos; `III_aliasreduce` descartado (ADR-014) |
 | FLAC | **descartado por ahora** (ADR-014): GCC ya genera la predicción LPC óptima; el conteo de ceros con `bfffo` podría ser más lento | decidir con mediciones del LC 580 |
 | Vorbis | en C (Tremor) | IMDCT, residuos, piso, ventana; EQ por coeficientes |
-| WMA | en C (libwma) | IMDCT, ruido y exponentes, ventana; EQ por coeficientes |
+| WMA | en C (libwma), **conversión de salida en asm** | FFT, IMDCT, ventana y VLC (≈ 40 % y 24 %); EQ por coeficientes |
 
 Cada kernel: referencia en C (`src/*_ref.c`, algunas generadas), `targets/asm/*_040.s`, prueba bit a bit bajo `qemu-m68k`
 (`targets/asm-test.sh`) y selector C/asm al compilar (`-DMP368K_ASM`). Ningún kernel se declara más rápido hasta medirlo en

@@ -23,6 +23,7 @@ static long filelen, filepos;
 static Heap heap;
 static unsigned char heapmem[512 * 1024];
 static uint32_t crc_table[256];
+static unsigned long max_frames;       /* --frames=N: tope de cuadros por archivo (0 = todo), para perfilar */
 
 void *mp368k_tremor_malloc(size_t n) { return heap_alloc(&heap, n); }
 void *mp368k_tremor_calloc(size_t c, size_t s) { return heap_calloc(&heap, c, s); }
@@ -160,6 +161,8 @@ static int decode_one(const char *path)
     for (;;) {
         long i;
 
+        if (max_frames && frames >= max_frames)
+            break;
         n = ov_read(&vf, pcm, (int)sizeof pcm, &bs);
         if (n <= 0)
             break;
@@ -182,7 +185,18 @@ int main(int argc, char **argv)
     int i, rc = 0;
 
     crc_init();
-    for (i = 1; i < argc; i++)
+    for (i = 1; i < argc; i++) {
+        if (argv[i][0] == '-' && argv[i][1] == '-') {
+            if (argv[i][2] == 'f') {                    /* --frames=N */
+                const char *s = argv[i] + 9;
+
+                max_frames = 0;
+                while (*s >= '0' && *s <= '9')
+                    max_frames = max_frames * 10 + (unsigned long)(*s++ - '0');
+            }
+            continue;
+        }
         rc |= decode_one(argv[i]);
+    }
     return rc;
 }

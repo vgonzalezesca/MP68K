@@ -22,6 +22,7 @@ static Arena arena;
 static unsigned char arenamem[256 * 1024];
 static uint8_t workbuf[16384];
 static uint32_t crc_table[256];
+static unsigned long max_frames;       /* --frames=N: tope de cuadros por archivo (0 = todo), para perfilar */
 
 Arena *codec_arena(void) { return &arena; }
 
@@ -156,7 +157,7 @@ static int decode_one(const char *path)
         report(path, 0, 0, rc);
         return 1;
     }
-    while (c->next(&f) == 1) {
+    while ((!max_frames || frames < max_frames) && c->next(&f) == 1) {
         unsigned i;
 
         for (i = 0; i < f.count; i++) {
@@ -178,7 +179,18 @@ int main(int argc, char **argv)
     int i, rc = 0;
 
     crc_init();
-    for (i = 1; i < argc; i++)
+    for (i = 1; i < argc; i++) {
+        if (argv[i][0] == '-' && argv[i][1] == '-') {
+            if (argv[i][2] == 'f') {                    /* --frames=N */
+                const char *s = argv[i] + 9;
+
+                max_frames = 0;
+                while (*s >= '0' && *s <= '9')
+                    max_frames = max_frames * 10 + (unsigned long)(*s++ - '0');
+            }
+            continue;
+        }
         rc |= decode_one(argv[i]);
+    }
     return rc;
 }

@@ -7,6 +7,7 @@
  */
 #include <stdint.h>
 #include "mad.h"
+#include "eq.h"
 
 #ifdef MP368K_HOSTREF
 #include <stdio.h>
@@ -21,6 +22,9 @@ static struct mad_stream stream;
 static struct mad_frame frame;
 static struct mad_synth synth;
 static uint32_t crc_table[256];
+static int only_half;                   /* --onlyhalf: solo el perfil de media tasa (para perfilar) */
+static int no_half;                     /* --nohalf: solo el perfil completo (para perfilar) */
+static unsigned long max_frames;       /* --frames=N: tope de cuadros por archivo (0 = todo), para perfilar */
 
 static void crc_init(void)
 {
@@ -114,6 +118,8 @@ static int decode_one(const char *path, int half)
     stream.options = half ? MAD_OPTION_HALFSAMPLERATE : 0;
     mad_stream_buffer(&stream, filebuf, (unsigned long)n);
     for (;;) {
+        if (max_frames && frames >= max_frames)
+            break;
         if (mad_frame_decode(&frame, &stream)) {
             if (MAD_RECOVERABLE(stream.error))
                 continue;
@@ -138,16 +144,47 @@ static int decode_one(const char *path, int half)
     return 0;
 }
 
+/* Los mismos ajustes que kBenchEq de bench/codecbench.c y EQ_BENCH de tools/host-codec-ref.sh. */
+static void eq_on(void)
+{
+    static const int8_t v[EQ_BANDS + 1] = { 12, -6, 4, 0, 10, -12, 8, 0, -4, 12, 0 };
+    EqSettings es;
+    int i;
+
+    es.enabled = 1;
+    for (i = 0; i < EQ_BANDS; i++)
+        es.band[i] = v[i];
+    es.preamp = v[EQ_BANDS];
+    eq_set(&es);
+}
+
 int main(int argc, char **argv)
 {
     int i, rc = 0;
 
     crc_init();
-    for (i = 1; i < argc; i++)
-    {
+    for (i = 1; i < argc; i++) {
+        if (argv[i][0] == '-' && argv[i][1] == '-') {
+            if (argv[i][2] == 'f') {                    /* --frames=N */
+                const char *s = argv[i] + 9;
+
+                max_frames = 0;
+                while (*s >= '0' && *s <= '9')
+                    max_frames = max_frames * 10 + (unsigned long)(*s++ - '0');
+            } else if (argv[i][2] == 'e') {             /* --eq */
+                eq_on();
+            } else if (argv[i][2] == 'n') {             /* --nohalf */
+                no_half = 1;
+            } else if (argv[i][2] == 'o') {             /* --onlyhalf */
+                only_half = 1;
+            }
+            continue;
+        }
         report(argv[i], 0, 0);
-        rc |= decode_one(argv[i], 0);
-        rc |= decode_one(argv[i], 1);
+        if (!only_half)
+            rc |= decode_one(argv[i], 0);
+        if (!no_half)
+            rc |= decode_one(argv[i], 1);
     }
     return rc;
 }

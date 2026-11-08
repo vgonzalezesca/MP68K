@@ -28,10 +28,10 @@ LD=$BIN/m68k-apple-macos-ld.real
 LIBGCC=$("$GCC" -m68040 -msoft-float -print-libgcc-file-name)
 
 # prueba : fuentes C de la referencia : fuentes asm del kernel
-declare -A REF=( [synth_window]="src/synth_ref.c" [dct32]="src/dct32_ref.c" [imdct_l]="src/imdct_ref.c" [pcm]="src/pcm_ref.c" )
-declare -A ASM=( [synth_window]="targets/asm/synth_window_040.s" [dct32]="targets/asm/dct32_040.s" [imdct_l]="targets/asm/imdct_l_040.s" [pcm]="targets/asm/pcm_040.s" )
+declare -A REF=( [synth_window]="src/synth_ref.c" [synth_window_half]="src/synth_ref.c" [dct32]="src/dct32_ref.c" [imdct_l]="src/imdct_ref.c" [pcm]="src/pcm_ref.c" [eq_mulg]="src/eq_ref.c" )
+declare -A ASM=( [synth_window]="targets/asm/synth_window_040.s" [synth_window_half]="targets/asm/synth_window_half_040.s" [dct32]="targets/asm/dct32_040.s" [imdct_l]="targets/asm/imdct_l_040.s" [pcm]="targets/asm/pcm_040.s" [eq_mulg]="targets/asm/eq_040.s" )
 TESTS=("$@")
-[[ ${#TESTS[@]} -gt 0 ]] || TESTS=(synth_window dct32 imdct_l pcm mp3_e2e vorbis_e2e wma_e2e)
+[[ ${#TESTS[@]} -gt 0 ]] || TESTS=(synth_window synth_window_half dct32 imdct_l pcm eq_mulg mp3_e2e vorbis_e2e wma_e2e)
 
 "$AS" -m68040 "$ROOT/tests/asm/start.s" -o "$OUT/start.o"
 "$AS" -m68040 "$ROOT/tests/asm/shim.s" -o "$OUT/shim.o"
@@ -52,11 +52,12 @@ mp3_e2e() {
     for f in "${lib[@]}"; do srcs+=("$mad/$f.c"); done
     # referencia: PC, síntesis original de libmad
     gcc -O2 -w -DMP368K_HOSTREF -DNDEBUG -DHAVE_LIMITS_H -DFPM_64BIT -DSIZEOF_INT=4 -DSIZEOF_LONG=8 -DSIZEOF_LONG_LONG=8 \
-        -I"$OUT/madh64" -I"$mad" "${srcs[@]}" "$ROOT/tests/asm/test_mp3_e2e.c" -o "$OUT/e2e_host"
-    (cd "$ROOT" && "$OUT/e2e_host" "${files[@]}") > "$OUT/e2e_host.txt"
+        -I"$OUT/madh64" -I"$mad" -I"$ROOT/src" "${srcs[@]}" "$ROOT/src/eq.c" "$ROOT/src/eq_ref.c" "$ROOT/tests/asm/test_mp3_e2e.c" -o "$OUT/e2e_host"
+    # la ultima corrida usa el ecualizador (ajustes de codecbench): comprueba tambien el EQ en big-endian
+    (cd "$ROOT" && "$OUT/e2e_host" "${files[@]}" --eq "${files[0]}") > "$OUT/e2e_host.txt"
     local rc_e2e=0 defs kern
-    for v in "ref|-DMP368K_SYNTH_WINDOW=mp368k_synth_window_full_ref -DMP368K_DCT32=mp368k_dct32_ref -DMP368K_IMDCT_L=mp368k_imdct_l_ref|src/synth_ref.c src/dct32_ref.c src/imdct_ref.c" \
-             "asm|-DMP368K_SYNTH_WINDOW=mp368k_synth_window_full_040 -DMP368K_DCT32=mp368k_dct32_040 -DMP368K_IMDCT_L=mp368k_imdct_l_040|targets/asm/synth_window_040.s targets/asm/dct32_040.s targets/asm/imdct_l_040.s"; do
+    for v in "orig||" "ref|-DMP368K_SYNTH_WINDOW=mp368k_synth_window_full_ref -DMP368K_SYNTH_WINDOW_HALF=mp368k_synth_window_half_ref -DMP368K_DCT32=mp368k_dct32_ref -DMP368K_IMDCT_L=mp368k_imdct_l_ref|src/synth_ref.c src/dct32_ref.c src/imdct_ref.c" \
+             "asm|-DMP368K_SYNTH_WINDOW=mp368k_synth_window_full_040 -DMP368K_SYNTH_WINDOW_HALF=mp368k_synth_window_half_040 -DMP368K_DCT32=mp368k_dct32_040 -DMP368K_IMDCT_L=mp368k_imdct_l_040|targets/asm/synth_window_040.s targets/asm/synth_window_half_040.s targets/asm/dct32_040.s targets/asm/imdct_l_040.s"; do
         IFS='|' read -r name defs kern <<<"$v"
         objs=("$OUT/start.o" "$OUT/shim.o" "$OUT/minilibc_$name.o")
         "$GCC" "${CFLAGS[@]}" -c "$ROOT/tests/asm/minilibc.c" -o "$OUT/minilibc_$name.o"
@@ -68,13 +69,21 @@ mp3_e2e() {
             objs+=("$o")
         done
         "$GCC" "${CFLAGS[@]}" -I"$OUT/madh32" -c "$ROOT/tests/asm/test_mp3_e2e.c" -o "$OUT/e2e_$name.o"; objs+=("$OUT/e2e_$name.o")
+        if [[ $name == asm ]]; then      # el EQ con su kernel de ganancia en asm
+            "$GCC" "${CFLAGS[@]}" -DMP368K_EQ_MULG_RANGE=mp368k_eq_mulg_range_040 -c "$ROOT/src/eq.c" -o "$OUT/e2e_eq_$name.o"
+            "$AS" -m68040 "$ROOT/targets/asm/eq_040.s" -o "$OUT/e2e_eq_k_$name.o"; objs+=("$OUT/e2e_eq_k_$name.o")
+        else
+            "$GCC" "${CFLAGS[@]}" -c "$ROOT/src/eq.c" -o "$OUT/e2e_eq_$name.o"
+            "$GCC" "${CFLAGS[@]}" -c "$ROOT/src/eq_ref.c" -o "$OUT/e2e_eq_k_$name.o"; objs+=("$OUT/e2e_eq_k_$name.o")
+        fi
+        objs+=("$OUT/e2e_eq_$name.o")
         for k in $kern; do
             o=$OUT/e2e_k_${name}_$(basename "$k" | tr . _).o
             if [[ $k == *.c ]]; then "$GCC" "${CFLAGS[@]}" -c "$ROOT/$k" -o "$o"; else "$AS" -m68040 "$ROOT/$k" -o "$o"; fi
             objs+=("$o")
         done
         "$LD" -m m68kelf -static -nostdlib -Ttext=0x80000000 -e _start "${objs[@]}" "$LIBGCC" -o "$OUT/e2e_$name"
-        (cd "$ROOT" && "$QEMU" -cpu m68040 "$OUT/e2e_$name" "${files[@]}") > "$OUT/e2e_$name.txt"
+        (cd "$ROOT" && "$QEMU" -cpu m68040 "$OUT/e2e_$name" "${files[@]}" --eq "${files[0]}") > "$OUT/e2e_$name.txt"
         if diff -u "$OUT/e2e_host.txt" "$OUT/e2e_$name.txt" >"$OUT/e2e_$name.diff"; then
             echo "  OK    nucleos $name: CRC de la sintesis igual al de libmad original en ${#files[@]} archivos"
         else
@@ -121,8 +130,8 @@ vorbis_e2e() {
 
 # WMA completos con el códec de MP368K (lector ASF + libwma) bajo qemu-m68k (big-endian) contra el PC (little-endian).
 wma_e2e() {
-    local wma=$OUT/libwma lib=(wmadeci wmafixed ffmpeg_bitstream mdct mdct_lookup fft-ffmpeg) ours=(src/asfparse.c src/id3.c src/arena.c)
-    local files=() f objs=() o
+    local wma=$OUT/libwma lib=(wmadeci wmafixed ffmpeg_bitstream mdct mdct_lookup fft-ffmpeg) ours=(src/asfparse.c src/id3.c src/arena.c src/pcm_ref.c)
+    local files=() f objs=() o name defs kern rc_e2e=0
     for f in testwma2 testwma1; do
         [[ -f $ROOT/tests/data/$f.wma ]] && files+=("tests/data/$f.wma")
     done
@@ -132,28 +141,36 @@ wma_e2e() {
     gcc -O2 -w -fwrapv -DMP368K_HOSTREF -DROCKBOX -I"$wma" -I"$wma/codecs/lib" -I"$ROOT/src" "${srcs[@]}" \
         "${ours[@]/#/$ROOT/}" "$ROOT/src/codec_wma.c" "$ROOT/tests/asm/test_wma_e2e.c" -o "$OUT/wma_host"
     (cd "$ROOT" && "$OUT/wma_host" "${files[@]}") > "$OUT/wma_host.txt"
-    objs=("$OUT/start.o" "$OUT/shim.o" "$OUT/minilibc_wma.o")
-    "$GCC" "${CFLAGS[@]}" -c "$ROOT/tests/asm/minilibc.c" -o "$OUT/minilibc_wma.o"
-    for f in "${lib[@]}"; do
-        o=$OUT/wma_$f.o
-        "$GCC" -m68040 -msoft-float -O2 -fomit-frame-pointer -ffreestanding -fno-builtin -fwrapv -w -DROCKBOX \
-            -I"$wma" -I"$wma/codecs/lib" -I"$ROOT/src" -c "$wma/$f.c" -o "$o"
-        objs+=("$o")
+    for v in "ref||" "asm|-DMP368K_PCM_WMA16=mp368k_pcm_wma16_040|targets/asm/pcm_040.s"; do
+        IFS='|' read -r name defs kern <<<"$v"
+        objs=("$OUT/start.o" "$OUT/shim.o" "$OUT/minilibc_wma_$name.o")
+        "$GCC" "${CFLAGS[@]}" -c "$ROOT/tests/asm/minilibc.c" -o "$OUT/minilibc_wma_$name.o"
+        for f in "${lib[@]}"; do
+            o=$OUT/wma_${name}_$f.o
+            "$GCC" -m68040 -msoft-float -O2 -fomit-frame-pointer -ffreestanding -fno-builtin -fwrapv -w -DROCKBOX \
+                -I"$wma" -I"$wma/codecs/lib" -I"$ROOT/src" -c "$wma/$f.c" -o "$o"
+            objs+=("$o")
+        done
+        for f in "${ours[@]}"; do
+            o=$OUT/wma_ours_${name}_$(basename "$f" .c).o
+            "$GCC" "${CFLAGS[@]}" -c "$ROOT/$f" -o "$o"; objs+=("$o")
+        done
+        "$GCC" "${CFLAGS[@]}" -DROCKBOX $defs -I"$wma" -I"$wma/codecs/lib" -c "$ROOT/src/codec_wma.c" -o "$OUT/wma_codec_$name.o"; objs+=("$OUT/wma_codec_$name.o")
+        "$GCC" "${CFLAGS[@]}" -c "$ROOT/tests/asm/test_wma_e2e.c" -o "$OUT/wma_e2e_$name.o"; objs+=("$OUT/wma_e2e_$name.o")
+        for k in $kern; do
+            o=$OUT/wma_k_${name}_$(basename "$k" | tr . _).o
+            "$AS" -m68040 "$ROOT/$k" -o "$o"; objs+=("$o")
+        done
+        "$LD" -m m68kelf -static -nostdlib -Ttext=0x80000000 -e _start "${objs[@]}" "$LIBGCC" -o "$OUT/wma_e2e_$name"
+        (cd "$ROOT" && "$QEMU" -cpu m68040 "$OUT/wma_e2e_$name" "${files[@]}") > "$OUT/wma_m68k_$name.txt"
+        if diff -u "$OUT/wma_host.txt" "$OUT/wma_m68k_$name.txt" > "$OUT/wma_$name.diff"; then
+            echo "  OK    WMA ($name) en 68k (big-endian, qemu) == PC (little-endian): CRC del PCM igual en ${#files[@]} archivos"
+        else
+            echo "  FALLA WMA ($name) en 68k distinto del PC:"; cat "$OUT/wma_$name.diff"; rc_e2e=1
+        fi
     done
-    for f in "${ours[@]}"; do
-        o=$OUT/wma_ours_$(basename "$f" .c).o
-        "$GCC" "${CFLAGS[@]}" -c "$ROOT/$f" -o "$o"; objs+=("$o")
-    done
-    "$GCC" "${CFLAGS[@]}" -DROCKBOX -I"$wma" -I"$wma/codecs/lib" -c "$ROOT/src/codec_wma.c" -o "$OUT/wma_codec.o"; objs+=("$OUT/wma_codec.o")
-    "$GCC" "${CFLAGS[@]}" -c "$ROOT/tests/asm/test_wma_e2e.c" -o "$OUT/wma_e2e.o"; objs+=("$OUT/wma_e2e.o")
-    "$LD" -m m68kelf -static -nostdlib -Ttext=0x80000000 -e _start "${objs[@]}" "$LIBGCC" -o "$OUT/wma_e2e"
-    (cd "$ROOT" && "$QEMU" -cpu m68040 "$OUT/wma_e2e" "${files[@]}") > "$OUT/wma_m68k.txt"
-    if diff -u "$OUT/wma_host.txt" "$OUT/wma_m68k.txt" > "$OUT/wma.diff"; then
-        echo "  OK    WMA en 68k (big-endian, qemu) == PC (little-endian): CRC del PCM igual en ${#files[@]} archivos"
-    else
-        echo "  FALLA WMA en 68k distinto del PC:"; cat "$OUT/wma.diff"; return 1
-    fi
     cat "$OUT/wma_host.txt"
+    return $rc_e2e
 }
 
 rc=0

@@ -54,6 +54,52 @@ mp368k_pcm_scale16_040:
 9:      movem.l (%sp)+,%d2-%d6/%a2
         rts
 
+| d0 = clamp((8192 - d0) >> 14, -32768, 32767): salida de libwma (polaridad invertida), ver pcm_kernels.h.
+        .macro  WC
+        neg.l   %d0
+        add.l   %d4,%d0
+        asr.l   %d3,%d0
+        cmp.l   %d5,%d0
+        ble.s   2f
+        move.l  %d5,%d0
+2:      cmp.l   %d6,%d0
+        bge.s   3f
+        move.l  %d6,%d0
+3:
+        .endm
+
+| void mp368k_pcm_wma16_040(const int32_t *s0, const int32_t *s1, int16_t *out, unsigned len, unsigned nch);
+        .globl  mp368k_pcm_wma16_040
+mp368k_pcm_wma16_040:
+        movem.l %d2-%d6/%a2,-(%sp)          | 24 bytes: argumentos desde 28(%sp)
+        move.l  28(%sp),%a0                 | s0
+        move.l  32(%sp),%a1                 | s1
+        move.l  36(%sp),%a2                 | out
+        move.l  40(%sp),%d2                 | len
+        beq.s   9f
+        move.l  #8192,%d4
+        moveq   #14,%d3
+        move.l  #32767,%d5
+        move.l  #-32768,%d6
+        cmp.l   #1,44(%sp)                  | nch == 1 ?
+        beq.s   5f
+1:      move.l  (%a0)+,%d0                  | estéreo intercalado
+        WC
+        move.w  %d0,(%a2)+
+        move.l  (%a1)+,%d0
+        WC
+        move.w  %d0,(%a2)+
+        subq.l  #1,%d2
+        bne.s   1b
+        bra.s   9f
+5:      move.l  (%a0)+,%d0                  | mono
+        WC
+        move.w  %d0,(%a2)+
+        subq.l  #1,%d2
+        bne.s   5b
+9:      movem.l (%sp)+,%d2-%d6/%a2
+        rts
+
 | void mp368k_pcm_u8_040(const int16_t *src, uint8_t *dst, unsigned long n);
         .globl  mp368k_pcm_u8_040
 mp368k_pcm_u8_040:

@@ -61,7 +61,7 @@ int sprintf(char *s, const char *fmt, ...)
 }
 
 /* libmad pide main_data (MAD_BUFFER_MDLEN) con malloc; un reservorio estático basta: el banco decodifica de a un archivo. */
-static unsigned char pool[64 * 1024];
+static unsigned char pool[1024 * 1024];     /* sin liberar: una corrida con muchos archivos asigna main_data en cada uno */
 static size_t pool_used;
 
 void *malloc(size_t n)

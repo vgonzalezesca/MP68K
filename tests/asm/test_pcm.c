@@ -4,6 +4,7 @@
  *
  * scale16: ceros, extremos (incluida la envoltura de +4096 cerca de INT_MAX), todos los umbrales de saturación y
  * rondas aleatorias, en mono y estéreo, con largos de 0 a 1152 y salida con palabras de guarda.
+ * wma16: umbrales alrededor de 8192 y los extremos (incluida la envoltura de 8192 - INT_MIN), mono y estéreo, y rondas aleatorias.
  * u8: las 65 536 entradas posibles. gain16: ganancias 0..300 (más de 256 se limita), mono y estéreo, y n impar.
  */
 #include <stdint.h>
@@ -39,6 +40,23 @@ static void run_scale(unsigned len, unsigned nch, unsigned tag)
     for (i = 0; i < total; i++)
         if (o_ref[i] != o_asm[i]) {
             fail("scale16", tag, i, (uint32_t)(uint16_t)o_ref[i], (uint32_t)(uint16_t)o_asm[i]);
+            return;
+        }
+}
+
+static void run_wma(unsigned len, unsigned nch, unsigned tag)
+{
+    unsigned i, total = nch * len + 2 * GUARD;
+    long clob;
+
+    for (i = 0; i < 2 * MAXN + 2 * GUARD; i++)
+        o_ref[i] = o_asm[i] = (int16_t)0x5A5A;
+    mp368k_pcm_wma16_ref(s0, s1, o_ref + GUARD, len, nch);
+    clob = call_checked((void *)mp368k_pcm_wma16_040, (long)s0, (long)s1, (long)(o_asm + GUARD), (long)len, (long)nch, 0, 0);
+    if (clob) fail("wma16 registros", tag, (unsigned)clob, 0, 0);
+    for (i = 0; i < total; i++)
+        if (o_ref[i] != o_asm[i]) {
+            fail("wma16", tag, i, (uint32_t)(uint16_t)o_ref[i], (uint32_t)(uint16_t)o_asm[i]);
             return;
         }
 }
@@ -98,6 +116,32 @@ int main(void)
             s1[i] = (round & 1) ? (int32_t)rnd(&seed) : (int32_t)(rnd(&seed) >> 2) - 0x20000000;
         }
         run_scale(rnd(&seed) % (MAXN + 1), 1 + (round & 1), 2 + round);
+    }
+
+    /* wma16: umbrales de saturacion de (8192 - v) >> 14 y extremos */
+    {
+        static const int32_t special[] = {
+            0, 1, -1, 8191, 8192, 8193, -8191, -8192, -8193, 0x1fffe000, 0x1fffffff, 0x20000000, -0x1fffe000, -0x20000000,
+            -0x20000001, -0x20002000, 0x0fffffff, 0x10000000, -0x10000000, 0x7fffffff, 0x7fffe000, (int32_t)0x80000000,
+            (int32_t)0x80000001, (int32_t)0x80002000, 16383, 16384, -16383, -16384, 0x00003fff, 0x00004000
+        };
+        unsigned ns = sizeof special / sizeof special[0];
+
+        for (i = 0; i < MAXN; i++) {
+            s0[i] = special[i % ns];
+            s1[i] = special[(i * 5 + 2) % ns];
+        }
+        for (nch = 1; nch <= 2; nch++)
+            for (n = 0; n <= 70; n++)
+                run_wma(n, nch, 1);
+        run_wma(MAXN, 2, 1);
+    }
+    for (round = 0; round < 800; round++) {
+        for (i = 0; i < MAXN; i++) {
+            s0[i] = (round & 1) ? (int32_t)rnd(&seed) : (int32_t)(rnd(&seed) >> 3) - 0x10000000;
+            s1[i] = (round & 1) ? (int32_t)rnd(&seed) : (int32_t)(rnd(&seed) >> 3) - 0x10000000;
+        }
+        run_wma(rnd(&seed) % (MAXN + 1), 1 + (round & 1), 2 + round);
     }
 
     /* u8: todas las entradas */

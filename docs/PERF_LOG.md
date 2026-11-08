@@ -88,4 +88,27 @@ Modelo del equipo: por confirmar.
 | MP3 | 192 kbps estéreo |  |  | on | sin medir |
 
 ## Registro cronológico
-(agregar entradas con la plantilla de arriba)
+
+### 2026-11-08 — `codecbench` con los kernels asm, en emulador
+Equipo: **emulador (Infinite Mac)**; Gestalt dice mach=36, proc=5 (68040), 64 MB. **No es el LC 580: los tiempos no valen para velocidad.**
+System: 8.1 (0x810)
+Build: 68k-ab73363-mod   Flags: -m68040 -msoft-float -O2 -fomit-frame-pointer -ffunction-sections -fdata-sections   Kernels: asm (`synth_kernel: asm`)
+Archivo: test128.mp3 (128 kbps), test192.mp3 (192), testmono.mp3 (64, mono), test128.mp3 con EQ activo (`kBenchEq`)   Perfil: FULL   EQ: on solo en la última fila
+
+| Prueba | Mediana | Mínimo | CRC del PCM | Observaciones |
+|---|---|---|---|---|
+| test128.mp3 | 3 613 999 µs | 3 609 000 µs | AAECF8F6 | RTF del emulador 3,32 |
+| test192.mp3 | 3 811 001 µs | 3 806 001 µs | 2398BAAC | RTF del emulador 3,15 |
+| testmono.mp3 | 1 743 000 µs | 1 741 000 µs | 5C79D5A0 | RTF del emulador 6,88 |
+| test128.mp3 + EQ | 4 052 000 µs | 4 044 000 µs | A91D9702 | +12 % sobre la misma pista sin EQ, en el emulador |
+
+Resolución del reloj: 999 µs. Pasadas: 1 fría + 3.
+
+**Lo que sí confirma:** los 4 CRC coinciden con `REFERENCE_CODECS.txt` del PC (se compararon a mano: el programa dijo "sin referencia" porque ese archivo no estaba
+junto a la app). Es la primera vez que los núcleos asm (síntesis, DCT32, IMDCT larga, PCM) producen el PCM correcto en una build real de Mac OS 8.1 sobre un 68040
+emulado, y que lo hace también con el ecualizador activo.
+**Lo que no se puede concluir:** nada de velocidad. Las "ciclos por muestra" del programa suponen 33 MHz y aquí no aplican; no hay corrida de `codecbench_ref` en la misma
+máquina, así que tampoco hay comparación C contra asm; y el +12 % del EQ es del emulador. FLAC, Ogg y WMA no entraron: salieron "no se pudo abrir (err=-43)" porque los
+archivos no estaban junto a la app (el paquete de visita los dejaba en `audio/` y las apps en carpetas aparte; corregido). Víctor confirmó aparte que Ogg y WMA funcionan en `mp368k`.
+Decisión derivada: la próxima corrida es `codecbench` y `codecbench_ref` desde `audio/`; la comparación que importa es en el LC 580.
+

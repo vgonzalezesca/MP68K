@@ -256,19 +256,16 @@ execute_process(
 if(NOT WMA_RESULT EQUAL 0)
     message(FATAL_ERROR "tools/prepare-libwma.sh fallo")
 endif()
-add_library(wma STATIC
+set(WMA_SOURCES
     ${WMA_DIR}/wmadeci.c ${WMA_DIR}/wmafixed.c ${WMA_DIR}/ffmpeg_bitstream.c ${WMA_DIR}/mdct.c
     ${WMA_DIR}/mdct_lookup.c ${WMA_DIR}/fft-ffmpeg.c)
-target_include_directories(wma PRIVATE ${WMA_DIR} ${WMA_DIR}/codecs/lib)
-target_compile_definitions(wma PRIVATE ROCKBOX)
-target_compile_options(wma PRIVATE -w -fwrapv)          # código de terceros: sin avisos; la envoltura de enteros es la esperada
 
 # Núcleos de la síntesis del MP3 (ADR-014): por omisión, la libmad original en C. Si el equipo trae asm
 # (MP368K_ASM_KERNEL_SOURCES y MP368K_ASM_KERNEL_DEFS, definidos en targets/target.cmake), la pila principal los
 # usa y se arma además una pila "_ref" con la libmad original para comparar las dos en el mismo equipo
 # (codecbench_ref). Selector de compilación: -DMP368K_ASM=OFF vuelve a C.
 function(mp368k_codec_stack SFX KERNEL_LABEL)
-    cmake_parse_arguments(K "" "" "SOURCES;DEFS;COREDEFS;CODECDEFS" ${ARGN})
+    cmake_parse_arguments(K "" "" "SOURCES;DEFS;COREDEFS;CODECDEFS;WMASOURCES;WMADEFS" ${ARGN})
     add_library(mad_eq${SFX} STATIC
         ${MAD_EQ_DIR}/bit.c ${MAD_EQ_DIR}/fixed.c ${MAD_EQ_DIR}/frame.c ${MAD_EQ_DIR}/huffman.c
         ${MAD_EQ_DIR}/layer12.c ${MAD_EQ_DIR}/layer3.c ${MAD_EQ_DIR}/stream.c ${MAD_EQ_DIR}/synth.c
@@ -278,6 +275,12 @@ function(mp368k_codec_stack SFX KERNEL_LABEL)
     target_compile_definitions(mad_eq${SFX} PRIVATE ${MAD_FPM} NDEBUG HAVE_LIMITS_H
         SIZEOF_INT=4 SIZEOF_LONG=4 SIZEOF_LONG_LONG=8 ${K_DEFS})
     target_compile_options(mad_eq${SFX} PRIVATE -w)
+
+    # libwma de esta pila: con núcleos asm (ventana de la IMDCT...) o con su código original en C
+    add_library(wma${SFX} STATIC ${WMA_SOURCES} ${K_WMASOURCES})
+    target_include_directories(wma${SFX} PRIVATE ${WMA_DIR} ${WMA_DIR}/codecs/lib ${CMAKE_SOURCE_DIR}/src)
+    target_compile_definitions(wma${SFX} PRIVATE ROCKBOX ${K_WMADEFS})
+    target_compile_options(wma${SFX} PRIVATE -w -fwrapv)    # código de terceros: sin avisos; la envoltura de enteros es la esperada
 
     add_library(decoder_core_eq${SFX} STATIC src/decoder_core.c)
     target_include_directories(decoder_core_eq${SFX} PUBLIC src)
@@ -296,12 +299,13 @@ function(mp368k_codec_stack SFX KERNEL_LABEL)
     if(K_CODECDEFS)
         target_compile_definitions(codecs${SFX} PRIVATE ${K_CODECDEFS})
     endif()
-    target_link_libraries(codecs${SFX} PUBLIC decoder_core_eq${SFX} tremor wma)
+    target_link_libraries(codecs${SFX} PUBLIC decoder_core_eq${SFX} tremor wma${SFX})
 endfunction()
 
 if(MP368K_ASM AND MP368K_ASM_KERNEL_SOURCES)
     mp368k_codec_stack("" asm SOURCES ${MP368K_ASM_KERNEL_SOURCES} DEFS ${MP368K_ASM_KERNEL_DEFS}
-        COREDEFS ${MP368K_ASM_CORE_DEFS} CODECDEFS ${MP368K_ASM_CODEC_DEFS})
+        COREDEFS ${MP368K_ASM_CORE_DEFS} CODECDEFS ${MP368K_ASM_CODEC_DEFS}
+        WMASOURCES ${MP368K_ASM_WMA_SOURCES} WMADEFS ${MP368K_ASM_WMA_DEFS})
     mp368k_codec_stack(_ref c)
     set(MP368K_HAVE_REF_STACK TRUE)
 else()

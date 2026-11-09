@@ -20,4 +20,14 @@ void mp368k_wma_fmul_add_add_040(int32_t *dst, const int32_t *src0, const int32_
 void mp368k_wma_fmul_reverse_ref(int32_t *dst, const int32_t *src0, const int32_t *src1, int len);
 void mp368k_wma_fmul_reverse_040(int32_t *dst, const int32_t *src0, const int32_t *src1, int len);
 
+/*
+ * mp368k_wma_fft_pass_*: una pasada de mariposas de la FFT split-radix de libwma (la función `pass` de fft-ffmpeg.c).
+ *   z   n*4 números complejos (re, im) de 32 bits, en lugar; n = distancia entre cuartos (los 4 cuartos son z[0..n), z[n..2n), z[2n..3n), z[3n..4n))
+ *   STEP  paso por la tabla de senos y cosenos, en palabras de 32 bits (8192 / tamaño de la FFT)
+ *   T   sincos_lookup0 (1026 palabras: pares seno, coseno de un cuarto de ciclo)
+ * Aritmética de libwma: MULT31(x, y) = (int32)((int64)x * y >> 32) << 1 (parte alta del producto, desplazada 1); sumas de 32 bits con envoltura.
+ */
+void mp368k_wma_fft_pass_ref(int32_t *z, unsigned int STEP, unsigned int n, const int32_t *T);
+void mp368k_wma_fft_pass_040(int32_t *z, unsigned int STEP, unsigned int n, const int32_t *T);
+
 #endif

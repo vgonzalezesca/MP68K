@@ -19,6 +19,10 @@ set(MP368K_ASM_KERNEL_DEFS MP368K_SYNTH_WINDOW=mp368k_synth_window_full_040 MP36
 set(MP368K_ASM_COMMON_SOURCES targets/asm/pcm_040.s targets/asm/eq_040.s)
 set(MP368K_ASM_COMMON_DEFS MP368K_PCM_U8=mp368k_pcm_u8_040 MP368K_PCM_GAIN16=mp368k_pcm_gain16_040)
 set(MP368K_ASM_CORE_DEFS MP368K_PCM_SCALE16=mp368k_pcm_scale16_040)
+# Núcleos de libwma (ventana de la IMDCT): se compilan dentro de la biblioteca wma de la pila asm; la pila _ref usa el código original.
+set(MP368K_ASM_WMA_SOURCES targets/asm/wma_window_040.s targets/asm/wma_fft_040.s)
+set(MP368K_ASM_WMA_DEFS MP368K_WMA_FMUL_ADD_ADD=mp368k_wma_fmul_add_add_040 MP368K_WMA_FMUL_REVERSE=mp368k_wma_fmul_reverse_040
+    MP368K_WMA_FFT_PASS=mp368k_wma_fft_pass_040)
 # Lo que se compila en la biblioteca de códecs (codec_wma.c y eq.c); solo la pila asm.
 set(MP368K_ASM_CODEC_DEFS MP368K_PCM_WMA16=mp368k_pcm_wma16_040 MP368K_EQ_MULG_RANGE=mp368k_eq_mulg_range_040)
 

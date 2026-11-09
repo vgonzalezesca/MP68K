@@ -28,10 +28,10 @@ LD=$BIN/m68k-apple-macos-ld.real
 LIBGCC=$("$GCC" -m68040 -msoft-float -print-libgcc-file-name)
 
 # prueba : fuentes C de la referencia : fuentes asm del kernel
-declare -A REF=( [synth_window]="src/synth_ref.c" [synth_window_half]="src/synth_ref.c" [dct32]="src/dct32_ref.c" [imdct_l]="src/imdct_ref.c" [pcm]="src/pcm_ref.c" [eq_mulg]="src/eq_ref.c" )
-declare -A ASM=( [synth_window]="targets/asm/synth_window_040.s" [synth_window_half]="targets/asm/synth_window_half_040.s" [dct32]="targets/asm/dct32_040.s" [imdct_l]="targets/asm/imdct_l_040.s" [pcm]="targets/asm/pcm_040.s" [eq_mulg]="targets/asm/eq_040.s" )
+declare -A REF=( [synth_window]="src/synth_ref.c" [synth_window_half]="src/synth_ref.c" [dct32]="src/dct32_ref.c" [imdct_l]="src/imdct_ref.c" [pcm]="src/pcm_ref.c" [eq_mulg]="src/eq_ref.c" [wma_window]="src/wma_ref.c" [wma_fft]="src/wma_ref.c" )
+declare -A ASM=( [synth_window]="targets/asm/synth_window_040.s" [synth_window_half]="targets/asm/synth_window_half_040.s" [dct32]="targets/asm/dct32_040.s" [imdct_l]="targets/asm/imdct_l_040.s" [pcm]="targets/asm/pcm_040.s" [eq_mulg]="targets/asm/eq_040.s" [wma_window]="targets/asm/wma_window_040.s" [wma_fft]="targets/asm/wma_fft_040.s" )
 TESTS=("$@")
-[[ ${#TESTS[@]} -gt 0 ]] || TESTS=(synth_window synth_window_half dct32 imdct_l pcm eq_mulg mp3_e2e vorbis_e2e wma_e2e)
+[[ ${#TESTS[@]} -gt 0 ]] || TESTS=(synth_window synth_window_half dct32 imdct_l pcm eq_mulg wma_window wma_fft mp3_e2e vorbis_e2e wma_e2e)
 
 "$AS" -m68040 "$ROOT/tests/asm/start.s" -o "$OUT/start.o"
 "$AS" -m68040 "$ROOT/tests/asm/shim.s" -o "$OUT/shim.o"
@@ -141,13 +141,14 @@ wma_e2e() {
     gcc -O2 -w -fwrapv -DMP368K_HOSTREF -DROCKBOX -I"$wma" -I"$wma/codecs/lib" -I"$ROOT/src" "${srcs[@]}" \
         "${ours[@]/#/$ROOT/}" "$ROOT/src/codec_wma.c" "$ROOT/tests/asm/test_wma_e2e.c" -o "$OUT/wma_host"
     (cd "$ROOT" && "$OUT/wma_host" "${files[@]}") > "$OUT/wma_host.txt"
-    for v in "ref||" "asm|-DMP368K_PCM_WMA16=mp368k_pcm_wma16_040|targets/asm/pcm_040.s"; do
-        IFS='|' read -r name defs kern <<<"$v"
+    local wdefs
+    for v in "ref|||" "asm|-DMP368K_PCM_WMA16=mp368k_pcm_wma16_040|targets/asm/pcm_040.s targets/asm/wma_window_040.s targets/asm/wma_fft_040.s|-DMP368K_WMA_FMUL_ADD_ADD=mp368k_wma_fmul_add_add_040 -DMP368K_WMA_FMUL_REVERSE=mp368k_wma_fmul_reverse_040 -DMP368K_WMA_FFT_PASS=mp368k_wma_fft_pass_040"; do
+        IFS='|' read -r name defs kern wdefs <<<"$v"
         objs=("$OUT/start.o" "$OUT/shim.o" "$OUT/minilibc_wma_$name.o")
         "$GCC" "${CFLAGS[@]}" -c "$ROOT/tests/asm/minilibc.c" -o "$OUT/minilibc_wma_$name.o"
         for f in "${lib[@]}"; do
             o=$OUT/wma_${name}_$f.o
-            "$GCC" -m68040 -msoft-float -O2 -fomit-frame-pointer -ffreestanding -fno-builtin -fwrapv -w -DROCKBOX \
+            "$GCC" -m68040 -msoft-float -O2 -fomit-frame-pointer -ffreestanding -fno-builtin -fwrapv -w -DROCKBOX $wdefs \
                 -I"$wma" -I"$wma/codecs/lib" -I"$ROOT/src" -c "$wma/$f.c" -o "$o"
             objs+=("$o")
         done

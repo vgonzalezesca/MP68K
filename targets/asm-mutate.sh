@@ -13,8 +13,8 @@ BIN=${RETRO68_BUILD:-$HOME/Retro68-build}/toolchain/bin
 QEMU=${QEMU:-qemu-m68k}
 TEST=${1:?prueba}; shift
 declare -A ASM=( [synth_window]="targets/asm/synth_window_040.s" [synth_window_half]="targets/asm/synth_window_half_040.s" [dct32]="targets/asm/dct32_040.s" [imdct_l]="targets/asm/imdct_l_040.s"
-                 [pcm]="targets/asm/pcm_040.s" [eq_mulg]="targets/asm/eq_040.s" )
-declare -A REFOBJ=( [synth_window]="ref_synth_ref.o" [synth_window_half]="ref_synth_ref.o" [dct32]="ref_dct32_ref.o" [imdct_l]="ref_imdct_ref.o" [pcm]="ref_pcm_ref.o" [eq_mulg]="ref_eq_ref.o" )
+                 [pcm]="targets/asm/pcm_040.s" [eq_mulg]="targets/asm/eq_040.s" [wma_window]="targets/asm/wma_window_040.s" [wma_fft]="targets/asm/wma_fft_040.s" )
+declare -A REFOBJ=( [synth_window]="ref_synth_ref.o" [synth_window_half]="ref_synth_ref.o" [dct32]="ref_dct32_ref.o" [imdct_l]="ref_imdct_ref.o" [pcm]="ref_pcm_ref.o" [eq_mulg]="ref_eq_ref.o" [wma_window]="ref_wma_ref.o" [wma_fft]="ref_wma_ref.o" )
 [[ -n ${ASM[$TEST]:-} ]] || { echo "asm-mutate: prueba desconocida: $TEST" >&2; exit 2; }
 for f in start.o shim.o "test_$TEST.o" "${REFOBJ[$TEST]}"; do
     [[ -f $OUT/$f ]] || { echo "asm-mutate: falta $OUT/$f: corra targets/asm-test.sh $TEST" >&2; exit 2; }

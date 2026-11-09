@@ -5,7 +5,7 @@ set(MP368K_CPU_FLAGS -m68040 -msoft-float)
 set(MP368K_OPT_FLAGS -O2 -fomit-frame-pointer -ffunction-sections -fdata-sections)
 # Se conservan los nombres para MacsBug (sin --mac-strip-macsbug) para depurar.
 set(MP368K_LINK_FLAGS -Wl,-gc-sections)
-set(MP368K_APPS sysprobe microbench decbench decprofile audiotest codecbench codecbench_ref mp368k segtest)
+set(MP368K_APPS sysprobe microbench decbench decprofile audiotest codecbench codecbench_ref mp368k segtest qttest)
 
 # Núcleos en ensamblador 68040 (ADR-008, ADR-014). Con -DMP368K_ASM=OFF el build usa la libmad original en C.
 # Con asm activo también se arma codecbench_ref (misma pila, libmad original) para compararlos en el mismo equipo.
@@ -41,6 +41,13 @@ function(mp368k_target_apps)
         CREATOR "M368")
     target_include_directories(segtest PRIVATE ${SEGTEST_DIR})
     target_link_libraries(segtest mp368k_common)
+
+    # Fase 6: diagnóstico de QuickTime (solo funciones ya declaradas por las Multiversal; ver targets/qttest.c).
+    add_application(qttest
+        targets/qttest.c
+        CONSOLE
+        CREATOR "M368")
+    target_link_libraries(qttest mp368k_common)
 
     # Etapa 1: microbenchmarks de CPU. Mide instrucciones 68k: no aplica en PowerPC.
     add_application(microbench

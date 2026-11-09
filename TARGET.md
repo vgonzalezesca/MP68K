@@ -25,6 +25,7 @@ Objetivo y presupuesto: `docs/SPECS_68K.md`. Datos del equipo: `docs/HARDWARE_LC
 | `mactime.c` | trap `_Microseconds` (A193) |
 | `hooks.c` | `MenuHook`/`DragHook` con un puente en asm |
 | `microbench.c` | microbenchmarks de instrucciones 68k |
+| `qttest.c` | Fase 6: ¿hay QuickTime y qué audio abre? Solo funciones ya declaradas por las Multiversal; sin selectores inventados (sin probar en un Mac) |
 | `check-nofpu.sh`, `package-visit.sh` | comprobación de FPU; paquete para llevar al LC 580 |
 | `asm/` | kernels 68040: `synth_window_040.s`, `pcm_040.s` (a mano) y `dct32_040.s`, `imdct_l_040.s` (generados por `asm/gen/`); ADR-014 |
 | `asm-test.sh` | prueba bit a bit de los kernels y decodificaciones completas bajo `qemu-m68k` (solo corrección, no tiempos) |

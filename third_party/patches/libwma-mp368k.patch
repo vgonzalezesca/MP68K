@@ -105,3 +105,28 @@
 +#endif
  
  #endif
+--- a/fft-ffmpeg.c
++++ b/fft-ffmpeg.c
+@@ -277,6 +277,14 @@
+ 
+ /* z[0...8n-1], w[1...2n-1] */
+ static void pass(FFTComplex *z_arg, unsigned int STEP_arg, unsigned int n_arg) ICODE_ATTR_TREMOR_MDCT;
++#ifdef MP368K_WMA_FFT_PASS
++/* mp368k: la pasada la hace un núcleo externo (src/wma_kernels.h); el original en C queda en la referencia (src/wma_ref.c). */
++void MP368K_WMA_FFT_PASS(int32_t *z, unsigned int STEP, unsigned int n, const int32_t *T);
++static void pass(FFTComplex *z_arg, unsigned int STEP_arg, unsigned int n_arg)
++{
++    MP368K_WMA_FFT_PASS((int32_t *)z_arg, STEP_arg, n_arg, sincos_lookup0);
++}
++#else
+ static void pass(FFTComplex *z_arg, unsigned int STEP_arg, unsigned int n_arg)
+ {
+     register FFTComplex * z = z_arg;
+@@ -309,6 +317,7 @@
+         w -= STEP;
+     }
+ }
++#endif /* MP368K_WMA_FFT_PASS */
+ 
+ /* what is STEP?
+    sincos_lookup0 has sin,cos pairs for 1/4 cycle, in 1024 points

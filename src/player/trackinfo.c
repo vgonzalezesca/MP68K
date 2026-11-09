@@ -6,6 +6,9 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "qtfmt.h"
+#include "qtplay.h"
+
 OSErr trackinfo_probe(FileReader *fr, CodecIO *io, uint8_t *buf, long cap, CodecInfo *ci, const Codec **codec)
 {
     int err = 0;
@@ -24,6 +27,41 @@ OSErr trackinfo_probe(FileReader *fr, CodecIO *io, uint8_t *buf, long cap, Codec
     case CODEC_ERR_MEMORY: return memFullErr;
     default:               return TRACKINFO_ERR_UNSUPPORTED;
     }
+}
+
+OSErr trackinfo_probe_ex(FileReader *fr, CodecIO *io, uint8_t *buf, long cap, CodecInfo *ci, const Codec **codec,
+                         Boolean *via_qt)
+{
+    uint8_t head[12];
+    long got = 0;
+
+    *via_qt = false;
+    *codec = NULL;
+    if (fileread_seek(fr, 0) == 0 && fileread_read(fr, head, sizeof head, &got) == 0 && got >= 4 &&
+        qtfmt_sniff(head, (size_t)got)) {
+        QtInfo qi;
+        int rc;
+
+        if (!qtplay_available())
+            return TRACKINFO_ERR_NO_QUICKTIME;
+        io->read = fileread_read;
+        io->seek = fileread_seek;
+        io->ctx = fr;
+        io->size = fr->size;
+        io->audio_start = 0;
+        rc = qtfmt_probe(io, &qi);
+        if (rc != CODEC_OK)
+            return rc == CODEC_ERR_IO ? ioErr : (rc == CODEC_ERR_PARAMS ? TRACKINFO_ERR_PARAMS : TRACKINFO_ERR_UNSUPPORTED);
+        memset(ci, 0, sizeof *ci);
+        strcpy(ci->format, qi.format);
+        ci->rate = qi.rate;
+        ci->channels = qi.channels;
+        ci->bits_src = qi.bits;
+        ci->duration_ms = qi.duration_ms;
+        *via_qt = true;
+        return noErr;
+    }
+    return trackinfo_probe(fr, io, buf, cap, ci, codec);
 }
 
 void trackinfo_name_without_extension(const char *name, char *out, size_t cap)

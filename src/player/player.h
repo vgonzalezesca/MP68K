@@ -30,6 +30,8 @@ typedef enum {
 #define PLAYER_ERR_UNSUPPORTED TRACKINFO_ERR_UNSUPPORTED
 #define PLAYER_ERR_PARAMS      TRACKINFO_ERR_PARAMS
 #define PLAYER_ERR_NO_FILE (-4102)
+#define PLAYER_ERR_NO_QUICKTIME TRACKINFO_ERR_NO_QUICKTIME     /* WAV/AIFF/AU y QuickTime no está instalado */
+#define PLAYER_ERR_QT_OPEN (-4105)      /* QuickTime no pudo abrir el archivo (el código de QuickTime va en last_error) */
 
 typedef struct {
     PlayerState state;
@@ -41,6 +43,7 @@ typedef struct {
     char format[8];                 /* "MP3", "FLAC"... */
     Boolean has_profiles;           /* admite FULL/HALF/MONO (solo MP3) */
     Boolean eq_available;           /* el ecualizador actúa sobre este formato */
+    Boolean via_quicktime;          /* suena por QuickTime: posición aproximada, sin búsqueda (salvo al comienzo) ni volumen */
     Boolean may_stutter;            /* la velocidad medida al empezar no alcanza para tiempo real (sin medir en el LC 580) */
     unsigned bits_src;              /* bits por muestra del archivo (0 si no aplica) */
     Boolean vbr;                    /* la cabecera dice que es VBR: bitrate es el promedio */
@@ -72,13 +75,16 @@ OSErr player_play(void);
 void player_pause(void);
 void player_stop(void);
 
-/* Salta a fraction_x1000/1000 de la duración (0..1000). Solo suena si está reproduciendo o en pausa. */
+/*
+ * Salta a fraction_x1000/1000 de la duración (0..1000). Solo suena si está reproduciendo o en pausa.
+ * Por QuickTime solo se puede volver al comienzo (0); cualquier otra posición se ignora (ADR-010).
+ */
 OSErr player_seek(unsigned fraction_x1000);
 
 void player_set_quality(PlayerQuality q);
 /* 0 = automático (16 bits si el hardware lo ofrece), 8 o 16. Si está sonando, reabre la salida en la posición actual. */
 void player_set_output_bits(unsigned bits);
-void player_set_volume(unsigned volume);    /* 0..100 */
+void player_set_volume(unsigned volume);    /* 0..100; no actúa sobre lo que suena por QuickTime (ADR-010) */
 /* Ecualizador (solo actúa sobre MP3; PlayerStatus.eq_available lo dice). Se aplica a lo que se decodifique desde ahora. */
 void player_set_eq(const EqSettings *s);
 const EqSettings *player_get_eq(void);

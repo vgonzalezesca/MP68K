@@ -13,6 +13,7 @@
 #include "trackinfo.h"
 #include "mactime.h"
 #include "memblock.h"
+#include "qtplay.h"
 
 #define READ_BUF_BYTES   (32L * 1024)
 #define CODEC_ARENA_BYTES (256L * 1024)    /* memoria de los códecs de terceros; FLAC ~36 KB y Vorbis ~40 KB en el archivo de prueba (medido en el PC) */
@@ -23,6 +24,7 @@
 #define PROBE_FRAMES     14
 #define PROBE_SKIP       2          /* frames iniciales que no cuentan (cachés frías) */
 #define PROBE_AT_X1000   200        /* se mide al 20 % del archivo: el comienzo suele ser fácil */
+#define QT_END_SLACK_MS  1500UL     /* por QuickTime: si la posición estimada pasa la duración en tanto, se da la pista por terminada */
 
 /* Umbral del modo automático: RTF mínimo (x100) para quedarse con un perfil. PROVISIONAL:
  * es el presupuesto de SPECS §3; se fija con los datos del LC 580. */
@@ -55,6 +57,10 @@ static struct {
     uint64_t last_idle_us;              /* instante de la llamada anterior a player_idle (0 = no medir) */
     unsigned long max_gap_ms;
     unsigned fill_ms;                   /* 0 = llenar el anillo; si no, colchón objetivo */
+    Boolean qt;                         /* el archivo abierto suena por QuickTime (no por un códec propio) */
+    Boolean qtOpen;                     /* hay una película abierta */
+    unsigned long qt_acc_ticks;         /* ticks sonados antes de la última pausa */
+    unsigned long qt_t0;                /* TickCount cuando empezó o siguió */
     PlayerStatus st;
 } P;
 
@@ -147,6 +153,11 @@ static void stop_internal(void)
         P.audioOpen = false;
     }
     close_stream();
+    if (P.qtOpen) {
+        qtplay_close();
+        P.qtOpen = false;
+    }
+    P.qt_acc_ticks = 0;
     P.draining = false;
     P.base_ms = 0;
     P.st.state = PLAYER_STOPPED;
@@ -338,6 +349,7 @@ void player_shutdown(void)
         fileread_close(&P.fr);
         P.fileOpen = false;
     }
+    qtplay_shutdown();
     memblock_free(&P.arena);
     memblock_free(&P.rbuf);
     P.inited = false;
@@ -358,6 +370,7 @@ OSErr player_open(FSSpec *spec)
     }
     memset(&P.st, 0, sizeof P.st);
     P.st.quality = q;
+    P.qt = false;
 
     err = fileread_open_spec(&P.fr, spec);
     if (err != noErr) {
@@ -373,8 +386,9 @@ OSErr player_open(FSSpec *spec)
     memcpy(P.st.name, spec->name + 1, n);
     P.st.name[n] = '\0';
 
-    err = trackinfo_probe(&P.fr, &P.io, (uint8_t *)P.rbuf.data, P.rbuf.size, &P.ci, &P.codec);
+    err = trackinfo_probe_ex(&P.fr, &P.io, (uint8_t *)P.rbuf.data, P.rbuf.size, &P.ci, &P.codec, &P.qt);
     if (err != noErr) {
+        P.qt = false;
         fileread_close(&P.fr);
         P.fileOpen = false;
         P.codec = NULL;
@@ -387,6 +401,13 @@ OSErr player_open(FSSpec *spec)
     else
         trackinfo_name_without_extension(P.st.name, P.st.title, sizeof P.st.title);
     strcpy(P.st.artist, P.ci.tags.artist);
+    if (P.qt) {
+        /* QuickTime abre el archivo por su cuenta: no se deja abierto el nuestro. */
+        fileread_close(&P.fr);
+        P.fileOpen = false;
+        P.st.via_quicktime = true;
+        strcpy(P.st.artist, "Via QuickTime - position approximate");
+    }
 
     strcpy(P.st.format, P.ci.format);
     P.st.has_profiles = P.ci.has_profiles != 0;
@@ -404,6 +425,68 @@ OSErr player_open(FSSpec *spec)
     return noErr;
 }
 
+/* ------------------------------------------------------------------------ */
+/* Archivos que suenan por QuickTime (ADR-010)                               */
+/* ------------------------------------------------------------------------ */
+
+/*
+ * Sin GetMovieTime (su selector no está en las Multiversal), la posición se estima con TickCount (60 por segundo),
+ * sumando solo los tramos en que suena. Es aproximada: no incluye la latencia de QuickTime ni los saltos del sistema.
+ */
+static unsigned long qt_position_ms(void)
+{
+    unsigned long ticks = P.qt_acc_ticks;
+
+    if (P.st.state == PLAYER_PLAYING)
+        ticks += TickCount() - P.qt_t0;
+    return ticks * 50UL / 3UL;
+}
+
+static OSErr play_qt(void)
+{
+    OSErr err;
+
+    if (P.st.state == PLAYER_PAUSED) {
+        qtplay_start();
+        P.qt_t0 = TickCount();
+        P.st.state = PLAYER_PLAYING;
+        return noErr;
+    }
+    if (P.st.state == PLAYER_PLAYING)
+        return noErr;
+    if (!qtplay_available())
+        return PLAYER_ERR_NO_QUICKTIME;
+    err = qtplay_open(&P.spec);
+    if (err != noErr) {
+        P.st.last_error = err;
+        return PLAYER_ERR_QT_OPEN;
+    }
+    P.qtOpen = true;
+    P.qt_acc_ticks = 0;
+    P.base_ms = 0;
+    P.st.ended = false;
+    P.st.may_stutter = false;
+    P.last_idle_us = 0;
+    P.qt_t0 = TickCount();
+    P.st.state = PLAYER_PLAYING;
+    qtplay_start();
+    return noErr;
+}
+
+static void idle_qt(void)
+{
+    unsigned long dur = P.st.duration_ms;
+
+    if (P.st.state != PLAYER_PLAYING || !P.qtOpen)
+        return;
+    qtplay_task();
+    if (qtplay_is_done() || (dur != 0 && qt_position_ms() > dur + QT_END_SLACK_MS)) {
+        stop_internal();
+        P.st.ended = true;
+        P.base_ms = dur;
+    }
+}
+
 OSErr player_play(void)
 {
     DecProfile prof;
@@ -411,6 +494,8 @@ OSErr player_play(void)
 
     if (!P.st.has_file)
         return PLAYER_ERR_NO_FILE;
+    if (P.qt)
+        return play_qt();
     if (P.st.state == PLAYER_PAUSED) {
         audio_set_paused(false);
         P.st.state = PLAYER_PLAYING;
@@ -445,6 +530,14 @@ OSErr player_play(void)
 
 void player_pause(void)
 {
+    if (P.qt) {
+        if (P.st.state == PLAYER_PLAYING) {
+            qtplay_stop();
+            P.qt_acc_ticks += TickCount() - P.qt_t0;
+            P.st.state = PLAYER_PAUSED;
+        }
+        return;
+    }
     if (P.st.state == PLAYER_PLAYING) {
         audio_set_paused(true);
         P.st.state = PLAYER_PAUSED;
@@ -468,6 +561,16 @@ OSErr player_seek(unsigned fraction_x1000)
         return PLAYER_ERR_NO_FILE;
     if (P.st.state == PLAYER_STOPPED)
         return noErr;
+    if (P.qt) {
+        /* Sin SetMovieTimeValue solo se puede volver al comienzo; lo demás no hace nada. */
+        if (fraction_x1000 == 0 && qtplay_rewind() == noErr) {
+            P.qt_acc_ticks = 0;
+            P.qt_t0 = TickCount();
+            if (P.st.state == PLAYER_PLAYING)
+                qtplay_start();
+        }
+        return noErr;
+    }
     if (fraction_x1000 > 1000)
         fraction_x1000 = 1000;
     ms = (unsigned long)((unsigned long long)P.st.duration_ms * fraction_x1000 / 1000);
@@ -561,6 +664,8 @@ void player_set_fill_target_ms(unsigned ms)
 
 Boolean player_wants_cpu(void)
 {
+    if (P.qt)
+        return P.st.state == PLAYER_PLAYING;    /* QuickTime necesita MoviesTask seguido (qttest lo llamó sin pausa) */
     return P.st.state != PLAYER_STOPPED && !P.draining && wants_more();
 }
 
@@ -570,6 +675,10 @@ void player_idle(void)
 
     if (!P.inited || P.st.state == PLAYER_STOPPED)
         return;
+    if (P.qt) {
+        idle_qt();
+        return;
+    }
 
     /* Diagnóstico: mayor intervalo entre llamadas mientras suena. Si el gancho de menú
      * funciona, mantener un menú abierto no lo hace crecer. */
@@ -652,6 +761,16 @@ const PlayerStatus *player_status(void)
 {
     PlayerStatus *s = &P.st;
 
+    if (P.qt) {
+        s->position_ms = s->ended ? s->duration_ms : (s->state == PLAYER_STOPPED ? 0 : qt_position_ms());
+        s->buffered_ms = 0;
+        if (s->duration_ms && s->position_ms > s->duration_ms)
+            s->position_ms = s->duration_ms;
+        s->underruns = 0;
+        s->max_gap_ms = 0;
+        s->arena_peak = 0;
+        return s;
+    }
     if (s->state != PLAYER_STOPPED && P.audioOpen && s->out_rate) {
         unsigned long long played = audio_frames_played();
 

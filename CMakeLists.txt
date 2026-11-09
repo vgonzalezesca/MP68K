@@ -88,6 +88,14 @@ endif()
 add_library(mp368k_hooks STATIC targets/hooks.c)
 target_include_directories(mp368k_hooks PRIVATE src)
 
+# Reproducción por QuickTime (ADR-010): solo donde el equipo la implemente (68k: targets/qtplay.c). Sin ese archivo,
+# src/qtplay.h deja reemplazos que dicen "QuickTime no está instalado" y el reproductor funciona como antes.
+if(EXISTS ${CMAKE_SOURCE_DIR}/targets/qtplay.c)
+    add_library(mp368k_qtplay STATIC targets/qtplay.c)
+    target_include_directories(mp368k_qtplay PRIVATE src)
+    add_compile_definitions(MP368K_HAVE_QT=1)
+endif()
+
 # --- Etapa 0: sysprobe ------------------------------------------------------
 if(sysprobe IN_LIST MP368K_APPS)
     add_application(sysprobe
@@ -322,9 +330,12 @@ endif()
 
 # --- Etapa 5b: el reproductor ---------------------------------------------------
 if(mp368k IN_LIST MP368K_APPS)
-    add_library(player_engine STATIC src/player/player.c src/order.c)
+    add_library(player_engine STATIC src/player/player.c src/order.c src/qtfmt.c)
     target_include_directories(player_engine PUBLIC src/player)
     target_link_libraries(player_engine PUBLIC codecs mp368k_common)
+    if(TARGET mp368k_qtplay)
+        target_link_libraries(player_engine PUBLIC mp368k_qtplay)
+    endif()
 
     add_application(mp368k
         src/player/app.c

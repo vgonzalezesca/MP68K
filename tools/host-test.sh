@@ -55,4 +55,47 @@ echo "== capa de codecs (FLAC, MP3) en 64 y 32 bits"
 echo "== ecualizador (unitaria y sobre audio real) en 64 y 32 bits"
 for b in 64 32; do "$B/test_eq$b" | grep -E 'FALLA|RESULTADO' || rc=1; done
 python3 -I "$ROOT/tests/host/check_eq.py" "$ROOT" || rc=1
+
+# --- etapa 6: archivos que reproduce QuickTime (WAV, AIFF, AIFC, AU): reconocimiento y duración por cabecera ---
+echo "== qtfmt (WAV, AIFF, AIFC, AU) contra ffprobe, en 64 y 32 bits"
+QT=$B/qt; rm -rf "$QT"; mkdir -p "$QT"
+for bits in 64 32; do
+    gcc -m$bits -O2 -Wall -Wextra -I"$ROOT/src" "$ROOT/src/qtfmt.c" "$ROOT/tests/host/test_qtfmt.c" -o "$B/test_qtfmt$bits" || rc=1
+done
+sox -R -n -r 44100 -c 2 -b 16 "$QT/s16.wav" synth 3.5 sine 440
+sox -R -n -r 22050 -c 1 -b 8  "$QT/m8.wav"  synth 2.25 sine 330
+sox -R -n -r 48000 -c 2 -b 24 "$QT/s24.wav" synth 1.7 sine 550
+sox -R -n -r 44100 -c 2 -b 16 "$QT/s16.aif" synth 3.5 sine 440
+sox -R -n -r 11025 -c 1 -b 8  "$QT/m8.aif"  synth 2.5 sine 330
+sox -R -n -r 48000 -c 2 -b 24 "$QT/s24.aif" synth 1.7 sine 550
+sox -R -n -r 44100 -c 2 -b 16 "$QT/s16.au"  synth 3.5 sine 440
+sox -R -n -r 8000  -c 1 -e mu-law "$QT/ulaw.au" synth 2.5 sine 330
+ffmpeg -v error -y -i "$QT/s16.wav" -c:a pcm_s16le -f aiff "$QT/s16le.aifc"
+ffmpeg -v error -y -i "$QT/s16.wav" -c:a pcm_mulaw -ar 8000 -ac 1 "$QT/ulaw.wav"
+head -c 100000 "$QT/s16.wav" > "$QT/cut.wav"
+head -c 100000 "$QT/s16.aif" > "$QT/cut.aif"
+head -c 5000 /dev/urandom > "$QT/basura.bin"
+printf 'RIFF\x24\x00\x00\x00WAVE' > "$QT/vacio.wav"
+for f in s16.wav m8.wav s24.wav s16.aif m8.aif s24.aif s16.au ulaw.au s16le.aifc ulaw.wav cut.wav cut.aif; do
+    ms=$(ffprobe -v error -show_entries format=duration -of csv=p=0 "$QT/$f" | awk '{printf "%d", $1 * 1000 + 0.5}')
+    hz=$(ffprobe -v error -select_streams a:0 -show_entries stream=sample_rate -of csv=p=0 "$QT/$f")
+    ch=$(ffprobe -v error -select_streams a:0 -show_entries stream=channels -of csv=p=0 "$QT/$f")
+    case $f in
+        ulaw.*) pcm=0 ;;
+        *.aifc) pcm=1 ;;
+        *) pcm=1 ;;
+    esac
+    case $f in
+        *.wav) fmt=WAV ;;
+        *.aif) fmt=AIFF ;;
+        *.aifc) fmt=AIFC ;;
+        *.au) fmt=AU ;;
+    esac
+    for bits in 64 32; do "$B/test_qtfmt$bits" ok "$QT/$f" $fmt "$hz" "$ch" "$ms" $pcm || rc=1; done
+done
+for bits in 64 32; do
+    "$B/test_qtfmt$bits" err "$QT/basura.bin" UNSUPPORTED || rc=1
+    "$B/test_qtfmt$bits" err "$QT/vacio.wav" UNSUPPORTED || rc=1
+    "$B/test_qtfmt$bits" names || rc=1
+done
 exit $rc

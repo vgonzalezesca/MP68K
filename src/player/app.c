@@ -99,7 +99,11 @@ static const char *play_error_text(OSErr err)
 {
     switch (err) {
     case PLAYER_ERR_UNSUPPORTED:
-        return "This file is not in a supported audio format (MP3, FLAC, Ogg Vorbis or WMA), or it is damaged.";
+        return "This file is not in a supported audio format (MP3, FLAC, Ogg Vorbis, WMA, or WAV/AIFF/AU through QuickTime), or it is damaged.";
+    case PLAYER_ERR_NO_QUICKTIME:
+        return "QuickTime is not installed, so this file cannot be played.";
+    case PLAYER_ERR_QT_OPEN:
+        return "QuickTime could not open this file.";
     case PLAYER_ERR_PARAMS:
         return "This player can only play audio with 1 or 2 channels and a sample rate from 8 to 48 kHz.";
     case memFullErr:

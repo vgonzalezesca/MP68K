@@ -12,6 +12,8 @@
 #include "fileread.h"
 #include "id3.h"
 #include "memblock.h"
+#include "qtfmt.h"
+#include "qtplay.h"
 #include "trackinfo.h"
 
 #define M3U_MAX_BYTES (64L * 1024)
@@ -73,6 +75,7 @@ static int add_entry(FSSpec *spec)
     CodecIO io;
     CodecInfo ci;
     const Codec *codec;
+    Boolean via_qt = false;
     PlaylistEntry *e;
     char fname[64];
     OSErr err;
@@ -80,7 +83,7 @@ static int add_entry(FSSpec *spec)
 
     if (sCount >= PLAYLIST_MAX || fileread_open_spec(&fr, spec) != noErr)
         return -1;
-    err = trackinfo_probe(&fr, &io, sProbe, sizeof sProbe, &ci, &codec);
+    err = trackinfo_probe_ex(&fr, &io, sProbe, sizeof sProbe, &ci, &codec, &via_qt);
     fileread_close(&fr);
     if (err != noErr)
         return -1;
@@ -158,7 +161,8 @@ static Boolean looks_like_audio(const unsigned char *pname, OSType type)
     char cname[64];
 
     pstr_to_c(pname, cname, sizeof cname);
-    return codec_name_matches(cname, (unsigned long)type) != 0;
+    return codec_name_matches(cname, (unsigned long)type) != 0 ||
+           (qtplay_available() && qtfmt_name_matches(cname, (unsigned long)type) != 0);
 }
 
 unsigned playlist_add_folder_of(FSSpec *any_file, unsigned *skipped)

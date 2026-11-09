@@ -50,6 +50,9 @@ compara el CRC del PCM con el del PC. **WMA v1 con exponentes LSP** tiene ~0,2 d
   así que deben venir de una fuente confiable.
 - `MoviesTask` se llama desde el bucle principal. Abre su propio canal: cerrar el nuestro mientras se usa.
 - Comprobar con Gestalt que QuickTime esté y avisar si falta.
+- **Hecho (2026-11-09):** `qttest` mostró QuickTime 2.5 en Infinite Mac: abre WAV PCM, AIFF, AIFC y AU con `OpenMovieFile` + `NewMovieFromFile`; no CAF, M4A ni WAV mu-law.
+  `src/qtfmt.c` (duración por cabecera), `src/qtplay.h` y `targets/qtplay.c` (68k) lo integran sin selectores nuevos. Posición estimada con `TickCount`; sin búsqueda
+  (solo al comienzo) ni volumen hasta tener selectores con fuente. **No inventar selectores:** si hacen falta, salen de un `Movies.h` de Apple y se anota el archivo.
 
 ## Ecualizador (ADR-011) — hecho para MP3
 Bandas: 70, 180, 320, 600, 1k, 3k, 6k, 12k, 14k y 16k Hz, más preamp y On (por confirmar contra un Winamp real).

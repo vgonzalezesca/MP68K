@@ -27,7 +27,7 @@ QuickTime, el ecualizador de Vorbis/WMA, el asm de Vorbis/WMA, y todo lo de PPC.
 | Ogg Vorbis | Tremor (entero), rama lowmem | ADR-009. **Hecho** (PC y QEMU): heap propio, ~37 KB; PCM a 1 LSB de ffmpeg |
 | FLAC | dr_flac | ADR-009. **Hecho** |
 | WMA | `libwma` de Rockbox, v1/v2 | ADR-009. **Hecho** (PC y QEMU): lector ASF propio; PCM a 1 LSB de ffmpeg. Sin Pro, Lossless, Voice ni DRM |
-| QuickTime | Movie Toolbox, como respaldo para lo no reconocido | ADR-010. Faltan declaraciones: hay que escribirlas |
+| QuickTime | Movie Toolbox, como respaldo para lo no reconocido | ADR-010. Hecho con lo ya declarado (sin selectores nuevos); duración por cabecera |
 | Ecualizador | por coeficientes en lo compartido | ADR-011 |
 | Logo | `tools/make_logo.py` genera `icl8`, `ics8`, `ICN#`, `ics#`, `BNDL` y `FREF`, y una versión mayor para About | Paleta del sistema de 256 colores. A 32×32 los anillos probablemente haya que redibujarlos, no reducirlos |
 | Compilaciones | `tools/build-all.sh` ya hace las tres | la FAT de `mp368k` necesita la 6-PPC |
@@ -65,7 +65,7 @@ QuickTime, el ecualizador de Vorbis/WMA, el asm de Vorbis/WMA, y todo lo de PPC.
 | 3 — Ecualizador del MP3 | DSP y ventana hechos; pruebas de PC OK (32 y 64 bits); **falta verlo y oírlo en Infinite Mac** |
 | 4 — Ogg Vorbis | pendiente |
 | 5 — WMA | pendiente |
-| 6 — QuickTime (con app de prueba previa) | pendiente |
+| 6 — QuickTime (con app de prueba previa) | `qttest` corrió en Infinite Mac (QuickTime 2.5: abre WAV, AIFF, AIFC y AU; no CAF, M4A ni WAV mu-law). Integrado en el reproductor (ADR-010), sin búsqueda ni volumen; **falta que Víctor oiga uno** |
 | 7 — Asm 68040 | pendiente |
 | 8 — Cierre | pendiente |
 

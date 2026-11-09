@@ -252,7 +252,7 @@ en el 68LC040 (sin medir). El código WMA deriva de ingeniería inversa: revisar
 **Contexto.** Víctor quiere soportar AIFF, WAV, SND y otros sin esfuerzo, a través del framework QuickTime.
 
 **Decisión.** Lo que la capa de códecs no reconozca se abre con el Movie Toolbox (`EnterMovies`, `NewMovieFromFile`,
-`MoviesTask`...). Los lectores propios de WAV/AIFF se descartan por ahora.
+`MoviesTask`...). Los lectores propios de WAV/AIFF se descartan por ahora (solo se lee la cabecera para la duración; ver el resultado de `qttest` abajo).
 
 **Hallazgos (verificado en los headers y bibliotecas).** Las Multiversal traen solo 21 funciones de QuickTime, sin
 `GetMovieDuration`, `GetMovieTime`, `GetMovieTimeScale`, `SetMovieTimeValue` ni `SetMovieVolume`. `libQuickTimeLib.a` de
@@ -266,6 +266,20 @@ PPC las exporta, pero no están declaradas. Hay que escribir las declaraciones y
 - Si abrir archivos que no son películas con `NewMovieFromFile` exige QuickTime 3 o posterior: por verificar.
 
 **Revisar si** se quiere EQ en WAV/AIFF: se agregan lectores propios, que además funcionarían sin QuickTime.
+
+**Resultado de `qttest` (2026-11-09, Infinite Mac, Mac OS 8.1; `targets/qttest.c`).** `Gestalt('qtim')` = 0x02508000: **QuickTime 2.5**. Con `OpenMovieFile`
++ `NewMovieFromFile` (funciones ya declaradas) **abrieron y avanzaron con `MoviesTask`: WAV PCM, AIFF, AIFC y AU**. **No abrieron:** CAF (error -2048), M4A/AAC
+(-32766) y WAV mu-law de 8 kHz (-2048); el significado exacto de los códigos está por verificar. `MoviesTask(movie, 0)` cuesta ~55 µs, cabe en el bucle del
+reproductor. **Sin confirmar:** que el audio haya sonado (el programa no lo oye) ni nada en el LC 580. Para abrir no hizo falta ningún selector nuevo.
+
+**Implementación (sin selectores nuevos; nada se inventa).** `src/qtfmt.{h,c}` reconoce WAV, AIFF/AIFC y AU por contenido y saca la **duración** (y tasa, canales y bits) de la
+cabecera, probado contra ffprobe en 64 y 32 bits; `src/qtplay.h` es la interfaz y `targets/qtplay.c` (solo 68k) la implementa con las 12 funciones ya declaradas
+(`EnterMovies`, `OpenMovieFile`, `NewMovieFromFile`, `CloseMovieFile`, `PrerollMovie`, `StartMovie`, `StopMovie`, `GoToBeginningOfMovie`, `MoviesTask`, `IsMovieDone`,
+`DisposeMovie`, `ExitMovies`); sin ese archivo, `qtplay.h` deja reemplazos que dicen "QuickTime no está instalado". En `player.c` el modo QuickTime cierra nuestro canal
+de audio, llama a `MoviesTask` desde `player_idle` y da la pista por terminada con `IsMovieDone` o al pasar 1,5 s de la duración. Límites asumidos, hasta tener selectores
+con fuente: la **posición es una estimación** con `TickCount` (no `GetMovieTime`), la **búsqueda solo vuelve al comienzo** y el **volumen no actúa**; tampoco hay balance,
+calidad, salida 8/16 ni ecualizador. Sin QuickTime (Gestalt falla) la app dice "QuickTime is not installed". Si Víctor aporta `Movies.h` de Apple (fuera de git),
+los selectores que falten se agregan anotando su fuente y se activa búsqueda y volumen.
 
 ## ADR-011 — Ecualizador de 10 bandas según el formato
 

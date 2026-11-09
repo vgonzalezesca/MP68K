@@ -8,6 +8,10 @@
 
 #include "codec.h"
 
+#ifndef E2E_CODEC
+#define E2E_CODEC codec_wma          /* -DE2E_CODEC=codec_flac para el e2e de FLAC (la prueba es la misma) */
+#endif
+
 #ifdef MP368K_HOSTREF
 #include <stdio.h>
 #include <stdlib.h>
@@ -146,7 +150,7 @@ static int decode_one(const char *path)
     io.size = filelen;
     arena_init(&arena, arenamem, sizeof arenamem);
     memset(&ci, 0, sizeof ci);
-    c = &codec_wma;
+    c = &E2E_CODEC;
     err = c->probe(&io, workbuf, sizeof workbuf, &ci);
     if (err != CODEC_OK) {
         report(path, 0, 0, err);

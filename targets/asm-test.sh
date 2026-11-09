@@ -31,7 +31,7 @@ LIBGCC=$("$GCC" -m68040 -msoft-float -print-libgcc-file-name)
 declare -A REF=( [synth_window]="src/synth_ref.c" [synth_window_half]="src/synth_ref.c" [dct32]="src/dct32_ref.c" [imdct_l]="src/imdct_ref.c" [pcm]="src/pcm_ref.c" [eq_mulg]="src/eq_ref.c" [wma_window]="src/wma_ref.c" [wma_fft]="src/wma_ref.c" )
 declare -A ASM=( [synth_window]="targets/asm/synth_window_040.s" [synth_window_half]="targets/asm/synth_window_half_040.s" [dct32]="targets/asm/dct32_040.s" [imdct_l]="targets/asm/imdct_l_040.s" [pcm]="targets/asm/pcm_040.s" [eq_mulg]="targets/asm/eq_040.s" [wma_window]="targets/asm/wma_window_040.s" [wma_fft]="targets/asm/wma_fft_040.s" )
 TESTS=("$@")
-[[ ${#TESTS[@]} -gt 0 ]] || TESTS=(synth_window synth_window_half dct32 imdct_l pcm eq_mulg wma_window wma_fft mp3_e2e vorbis_e2e wma_e2e)
+[[ ${#TESTS[@]} -gt 0 ]] || TESTS=(synth_window synth_window_half dct32 imdct_l pcm eq_mulg wma_window wma_fft mp3_e2e vorbis_e2e wma_e2e flac_e2e)
 
 "$AS" -m68040 "$ROOT/tests/asm/start.s" -o "$OUT/start.o"
 "$AS" -m68040 "$ROOT/tests/asm/shim.s" -o "$OUT/shim.o"
@@ -112,7 +112,7 @@ vorbis_e2e() {
     "$GCC" "${CFLAGS[@]}" -c "$ROOT/tests/asm/minilibc.c" -o "$OUT/minilibc_vorbis.o"
     for f in "${lib[@]}"; do
         o=$OUT/tremor_$f.o
-        "$GCC" -m68040 -msoft-float -O2 -fomit-frame-pointer -ffreestanding -fno-builtin -fwrapv -w -DMP368K_TREMOR \
+        "$GCC" -m68040 -msoft-float -O2 -fomit-frame-pointer -ffreestanding -fno-builtin -fwrapv -w -DMP368K_TREMOR ${TREMOR_EXTRA:-} \
             -I"$trem" -I"$ROOT/src" -c "$trem/$f.c" -o "$o"
         objs+=("$o")
     done
@@ -174,8 +174,43 @@ wma_e2e() {
     return $rc_e2e
 }
 
+# FLAC completos con el códec de MP368K (dr_flac) bajo qemu-m68k (big-endian) contra el PC (little-endian). Se usa el mismo arnés que WMA
+# (tests/asm/test_wma_e2e.c con -DE2E_CODEC=codec_flac). Es la base del perfil de FLAC (targets/asm-prof.sh flac).
+flac_e2e() {
+    local ours=(src/codec_flac.c src/dr_flac_impl.c src/vorbiscomment.c src/id3.c src/arena.c)
+    local files=() f objs=() o rc_e2e=0 dr=$OUT/drflac
+    for f in testflac testflacmono testflac24 testflac8; do
+        [[ -f $ROOT/tests/data/$f.flac ]] && files+=("tests/data/$f.flac")
+    done
+    [[ ${#files[@]} -gt 0 ]] || { echo "flac_e2e: faltan los .flac de tests/data (tools/make_testfiles.sh)" >&2; return 1; }
+    "$ROOT/tools/prepare-dr-flac.sh" "$dr"
+    gcc -O2 -w -fwrapv -DMP368K_HOSTREF -DE2E_CODEC=codec_flac -I"$dr" -I"$ROOT/src" "${ours[@]/#/$ROOT/}" "$ROOT/tests/asm/test_wma_e2e.c" -o "$OUT/flac_host"
+    (cd "$ROOT" && "$OUT/flac_host" "${files[@]}") > "$OUT/flac_host.txt"
+    objs=("$OUT/start.o" "$OUT/shim.o" "$OUT/minilibc_flac.o")
+    "$GCC" "${CFLAGS[@]}" -c "$ROOT/tests/asm/minilibc.c" -o "$OUT/minilibc_flac.o"
+    for f in "${ours[@]}"; do
+        o=$OUT/flac_ours_$(basename "$f" .c).o
+        "$GCC" "${CFLAGS[@]}" -w -DNDEBUG -I"$dr" -c "$ROOT/$f" -o "$o"; objs+=("$o")
+    done
+    "$GCC" "${CFLAGS[@]}" -DE2E_CODEC=codec_flac -c "$ROOT/tests/asm/test_wma_e2e.c" -o "$OUT/flac_e2e.o"; objs+=("$OUT/flac_e2e.o")
+    "$LD" -m m68kelf -static -nostdlib -Ttext=0x80000000 -e _start "${objs[@]}" "$LIBGCC" -o "$OUT/flac_e2e"
+    (cd "$ROOT" && "$QEMU" -cpu m68040 "$OUT/flac_e2e" "${files[@]}") > "$OUT/flac_m68k.txt"
+    if diff -u "$OUT/flac_host.txt" "$OUT/flac_m68k.txt" > "$OUT/flac.diff"; then
+        echo "  OK    FLAC en 68k (big-endian, qemu) == PC (little-endian): CRC del PCM igual en ${#files[@]} archivos"
+    else
+        echo "  FALLA FLAC en 68k distinto del PC:"; cat "$OUT/flac.diff"; rc_e2e=1
+    fi
+    cat "$OUT/flac_host.txt"
+    return $rc_e2e
+}
+
 rc=0
 for t in "${TESTS[@]}"; do
+    if [[ $t == flac_e2e ]]; then
+        echo "== flac_e2e"
+        flac_e2e || rc=1
+        continue
+    fi
     if [[ $t == wma_e2e ]]; then
         echo "== wma_e2e"
         wma_e2e || rc=1

@@ -367,7 +367,7 @@ completo y media tasa**) con el mismo CRC que la libmad original del PC. Tremor 
 - **FLAC en asm: descartado.** Se compiló la predicción LPC con el GCC de Retro68 y sale justo lo que se escribiría a mano (tabla de saltos y
   `move.l`, `muls.l` con memoria, `add.l` por coeficiente): no hay ganancia que justifique el riesgo. Reemplazar el conteo de ceros de dr_flac por
   `bfffo` podría ser **más lento** que su tabla en el caso habitual de códigos Rice cortos: solo se decide midiendo en el LC 580.
-- **Vorbis y WMA en asm: pendiente.** Tremor y libwma corren en C. Sus candidatos son la IMDCT (FFT con bucles de tamaño variable, que el
+- **(Actualizado 2026-11-09: ver la "Ronda 3" abajo.) Vorbis y WMA en asm: pendiente.** Tremor y libwma corren en C. Sus candidatos son la IMDCT (FFT con bucles de tamaño variable, que el
   generador de código recto no cubre) y el ecualizador por coeficientes; se decide con las mediciones de `codecbench`.
 - Huffman, requantización y la IMDCT corta del MP3: segunda tanda.
 
@@ -403,6 +403,27 @@ ningún núcleo se declara más rápido que la referencia.** QEMU no modela tiem
 ## Plantilla para nuevas decisiones
 
 ```
+**Ronda 3 (2026-11-09): WMA, y los números de FLAC y Vorbis.** Víctor pidió seguir pasando a asm los núcleos de MP3, WMA, FLAC y Vorbis (QuickTime se hizo antes en la misma ronda, ADR-010).
+Todo con la receta de siempre (referencia en C en `master`, asm en `68k`, prueba bit a bit con extremos y aleatorios, mutantes, e2e con el mismo CRC que el PC como 68040 big-endian,
+selector C/asm y "sin medir"); los conteos son **instrucciones bajo QEMU, no tiempo**.
+- **Entraron dos kernels de WMA.** (1) **Ventana de la IMDCT** (`wma_window_040.s`: `fmul_add_add` y `fmul_reverse`; `fixmul32b` = `(hi << 1) | (lo >>> 31)` sale de `add.l` + `addx.l`): de 14 a 6
+  instrucciones por producto, `wma_window` 56,0 → 24,0 por cuadro. (2) **Pasada de la FFT** (`wma_fft_040.s`, `pass`): una pasada completa en asm con el mismo recorrido que C (ZERO, W10, bucle
+  do-while, W01 hacia atrás); cada `t` se arma sumando las dos partes altas de `muls.l` y desplazando una sola vez (`(A<<1)+(B<<1) = (A+B)<<1` módulo 2^32): 69,1 → 52,7 por cuadro (−24 %).
+  Resultado: **WMA v2 estéreo 364,7 → 316,3 instrucciones por cuadro (−13 %)**, mismo CRC. El código sale de `libwma` con el parche `libwma-mp368k.patch` (ganchos `MP368K_WMA_FMUL_ADD_ADD`,
+  `MP368K_WMA_FMUL_REVERSE`, `MP368K_WMA_FFT_PASS`; sin las macros queda el código original) y `libwma` pasó a construirse por pila (`wma`, `wma_ref`) para que `codecbench_ref` conserve el C.
+  Mutantes: 9/9 y 11/11 detectados; los dos que sobrevivieron en la FFT eran **equivalentes** (el tope `w_end` desplazado 1-2 palabras: `w` solo toma valores múltiplos de 4 en esa comparación).
+- **FLAC: perfil por primera vez** (`targets/asm-test.sh flac_e2e`, que además prueba dr_flac como 68040 big-endian: los 4 CRC coinciden con el PC). 239 instrucciones por cuadro estéreo de 16 bits (260 con
+  24 bits, 110 en mono), **87-92 % en `drflac__decode_samples_with_residual`** (Rice y LPC juntos). Es el formato más barato por cuadro de los cuatro (MP3 431, WMA 316, Vorbis 474), así que
+  **FLAC sigue sin asm**: reemplazar el conteo de ceros por `bfffo` solo bajaría unas pocas instrucciones por muestra y su costo en el 040 está por verificar (M68040UM); la fusión Rice + LPC en
+  un solo bucle asm exigiría reescribir el lector de bits de dr_flac (caché, líneas L2, CRC) por una ganancia que sin `microbench` del LC 580 no se puede estimar.
+- **Vorbis: no se escribió asm.** Con `-fno-inline` (variable `TREMOR_EXTRA` de `asm-test.sh`) el costo de `mdct_backward` (38 %) se reparte en ~8 rutinas (`mdct_butterfly_generic`, `mdct_step7`, `mdct_step8`,
+  `mdct_bitreverse`, `presymmetry`, `mdct_butterfly_8/16/32`) y en los productos `XPROD31`/`XNPROD31`; el resto es dispersión (`decode_map`, `decode_packed_entry_number`, `vorbis_book_decodevv_add`,
+  `mdct_unroll_lap`, `render_line`). Ninguna pieza sola pasa la compuerta: sería reescribir todo el MDCT para un ahorro estimado de ~20 % de esa parte (~8 % de Vorbis).
+- **MP3, 2.ª tanda (`III_decode`, IMDCT corta): sin hacer en esta ronda.**
+- **Conclusión que importa.** Quitar instrucciones ayuda poco si `muls.l` cuesta mucho en el 68LC040: WMA, Vorbis y MP3 hacen 25-30 multiplicaciones 32×32→64 por cuadro y ese costo, que **no conozco**, es lo
+  que decide si llegan a tiempo real. **Lo primero que hay que medir sigue siendo `microbench` en el LC 580.** Con ese dato, el conteo de instrucciones se convierte en una estimación de ciclos y se
+  decide si compensa reescribir el MDCT de Tremor y `ff_imdct_half`, o si hay que bajar trabajo (media tasa, mono). Nada de esto se declara más rápido sin esa medición.
+
 ## ADR-NNN — Título
 Contexto:
 Decisión:

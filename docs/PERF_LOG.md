@@ -104,10 +104,13 @@ instrucciones de costos muy distintos (`muls.l` 32×32→64, divisiones, saltos)
 | MP3 HALF, núcleos asm | **341,3** (−25 %) | 32,9 | ventana de media tasa 26 (88,5; en C eran 161,9), IMDCT 23, `III_decode` 20, DCT32 16 |
 | Ogg Vorbis estéreo (Tremor, C) | 473,7 | 29,8 | `mdct_backward` 38, `decode_map` 10, `decode_packed_entry_number` 9, `mdct_unroll_lap` 8 |
 | Ogg Vorbis mono (Tremor, C) | 252,6 | 15,0 | `mdct_backward` 35, `decode_packed_entry_number` 13, `decode_map` 11 |
-| WMA v2 estéreo (libwma, conversión a PCM en asm) | 364,7 (antes 379,7) | 25,0 | `wma_decode_block` 24, FFT (`pass`) 19, `ff_imdct_half` 16, `wma_window` 15 |
-| WMA v1 estéreo | 365,0 | 25,0 | igual que v2 |
+| WMA v2 estéreo (libwma, conversión a PCM, ventana y FFT `pass` en asm; 2026-11-09) | **316,3** (−13 % sobre 364,7; sin asm de la ronda: 379,7) | 24,9 | `wma_decode_block` 28, `ff_imdct_half` 18, FFT `pass` (asm) 17, `wma_pcm` 6, ventana (asm) 4 |
+| WMA v1 estéreo (idem) | 316,7 | 24,9 | igual que v2 |
+| FLAC estéreo 16 bits (dr_flac, C; perfil nuevo 2026-11-09) | 239,1 | 14,0 | `drflac__decode_samples_with_residual` 87 (Rice + LPC), paso a `int16` 10 |
+| FLAC estéreo 24 bits (dr_flac, C) | 260,6 | 12,9 | `drflac__decode_samples_with_residual` 92, paso a `int16` 5 |
+| FLAC mono 16 bits (dr_flac, C) | 110,0 | 6,5 | idem |
 
-`memcpy`, `memmove`, `memset` y `qsort` de mp368k minilibc son bucles de bytes (más lentos que los de la libc real) y se separan en el informe.
+Los casos de FLAC salen de `targets/asm-test.sh flac_e2e` (la primera vez que dr_flac corre como 68040 big-endian bajo QEMU: los 4 CRC coinciden con el PC). `memcpy`, `memmove`, `memset` y `qsort` de mp368k minilibc son bucles de bytes (más lentos que los de la libc real) y se separan en el informe.
 
 ## Registro cronológico
 

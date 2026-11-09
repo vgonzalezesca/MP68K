@@ -70,3 +70,38 @@
  }
  
  static void wma_lsp_to_curve_init(WMADecodeContext *s, int frame_len)
+--- a/wmafixed.h
++++ b/wmafixed.h
+@@ -221,17 +221,32 @@
+ 
+ #else
+ 
++/* mp368k: núcleos externos (src/wma_kernels.h) si el build los define; si no, el código original de abajo. */
++#ifdef MP368K_WMA_FMUL_ADD_ADD
++void MP368K_WMA_FMUL_ADD_ADD(fixed32 *dst, const fixed32 *src0, const fixed32 *src1, int len);
++static inline void vector_fmul_add_add(fixed32 *dst, const fixed32 *src0, const fixed32 *src1, int len){
++    MP368K_WMA_FMUL_ADD_ADD(dst, src0, src1, len);
++}
++#else
+ static inline void vector_fmul_add_add(fixed32 *dst, const fixed32 *src0, const fixed32 *src1, int len){
+     int i;
+     for(i=0; i<len; i++)
+         dst[i] = fixmul32b(src0[i], src1[i]) + dst[i];
+ }
++#endif
+ 
++#ifdef MP368K_WMA_FMUL_REVERSE
++void MP368K_WMA_FMUL_REVERSE(fixed32 *dst, const fixed32 *src0, const fixed32 *src1, int len);
++static inline void vector_fmul_reverse(fixed32 *dst, const fixed32 *src0, const fixed32 *src1, int len){
++    MP368K_WMA_FMUL_REVERSE(dst, src0, src1, len);
++}
++#else
+ static inline void vector_fmul_reverse(fixed32 *dst, const fixed32 *src0, const fixed32 *src1, int len){
+     int i;
+     src1 += len-1;
+     for(i=0; i<len; i++)
+         dst[i] = fixmul32b(src0[i], src1[-i]);
+ }
++#endif
+ 
+ #endif

@@ -24,28 +24,111 @@ import subprocess
 import sys
 import tempfile
 
-# Pesos supuestos en ciclos por instrucción (por verificar): 1 por omisión.
-WEIGHTS = [
-    (re.compile(r"^mul[su]l$"), 20),        # 32x32 -> 64 (docs/SPECS_68K.md usa ~20)
-    (re.compile(r"^mul[su](w)?$"), 5),
-    (re.compile(r"^div"), 40),
-    (re.compile(r"^bf"), 15),
-]
-MULS = re.compile(r"^mul[su](l|w)?$")
+# Modelo de ciclos: tiempos de la sección 10 del MC68040UM tal como los cobra el emulador Snow (su timing040.rs, leído el
+# 2026-11-09), que es donde Víctor midió microbench y audiotest: muls.l 20, muls.w 16, desplazamientos 2-4, salto tomado 2 y
+# no tomado 3, rts 5, modos indexados 3-4, y 1 para casi todo lo demás. Se aproxima desde el texto del desensamblado de QEMU.
+# NO incluye el caché de datos (QEMU no da las direcciones de los datos); el de instrucciones se simula aparte.
+INDEXED = re.compile(r"@\([^)]*,%")
+MOVEM_RANGE = re.compile(r"%(d|a)(\d)-%(?:d|a)(\d)")
+MOVEM_ONE = re.compile(r"%(?:d\d|a\d|fp|sp)")
+MULS = re.compile(r"^mul[su][lw]?$")
+COND = re.compile(r"^b(ne|eq|pl|mi|cc|cs|hi|ls|ge|lt|gt|le|vc|vs)[swl]?$")
+SHIFT = re.compile(r"^(as|ls|ro|rox)[lr][bwl]?$")
+ALU_A = re.compile(r"^(adda|suba)[wl]$")
+
+
+def movem_regs(ops):
+    n = 0
+    lst = [o for o in ops.split(",") if "@" not in o]
+    for part in "/".join(lst).split("/"):
+        m = MOVEM_RANGE.search(part)
+        if m:
+            n += int(m.group(3)) - int(m.group(2)) + 1
+        elif MOVEM_ONE.search(part):
+            n += 1
+    return max(n, 1)
+
+
+def insn_cost(mn, ops):
+    """(espera, base) en ciclos de una instrucción, por su mnemónico y sus operandos en la sintaxis de QEMU."""
+    idx = 2 if INDEXED.search(ops) else 0
+    pcrel = 2 if "%pc@" in ops else 0
+    mem = "@" in ops
+    if mn in ("mulsl", "mulul"):
+        return pcrel, 20 + idx
+    if mn in ("mulsw", "muluw", "muls", "mulu"):
+        return pcrel, 16 + idx
+    if mn.startswith("div"):
+        return pcrel, (44 if mn.endswith("l") else 27) + idx
+    if SHIFT.match(mn):
+        base = 3 if mn.startswith("asl") else 2
+        return 0, base + (0 if ops.startswith("#") or mem else 1) + idx
+    if mn == "swap" or mn == "extw":
+        return 0, 2
+    if mn.startswith("bf"):
+        reg = 0 if re.search(r",\d+,\d+", ops) or re.match(r"[^,]*,\d+,\d+", ops) else 1
+        base = {"bfextu": 4, "bfexts": 4, "bfffo": 6, "bfins": 4, "bftst": 4}.get(mn, 6)
+        return (2, base + 3 + idx) if mem else (0, base + reg)
+    if COND.match(mn):
+        return 0, 0                                 # se cobra al ejecutar: 2 si salta, 3 si no
+    if mn.startswith("bra"):
+        return 0, 2
+    if mn.startswith("bsr"):
+        return 1, 1
+    if mn in ("jsr", "jmp"):
+        if pcrel:
+            return 5, 1
+        if idx:
+            return 0, 6
+        return (3, 1) if "@(" in ops else (2, 1)
+    if mn == "rts":
+        return 0, 5
+    if mn.startswith("db"):
+        return 0, 3
+    if mn.startswith("movem"):
+        to_regs = ops.split(",")[0].find("@") >= 0
+        return 1, (2 if to_regs else 1) + movem_regs(ops) + (6 if idx else 0)
+    if mn == "lea":
+        return (0, 4) if idx else ((3, 1) if pcrel else ((1, 1) if "@(" in ops else (0, 1)))
+    if mn == "pea":
+        return (0, 5) if idx else (1, 2)
+    if mn.startswith("link"):
+        return 2, 1
+    if mn == "unlk":
+        return 1, 1
+    if ALU_A.match(mn):
+        src = ops.split(",")[0]
+        if idx:
+            return 0, 5
+        if src.startswith("#") or src.startswith("%a") and "@" not in src:
+            return 0, 1
+        return (1 if "@(" in src or "@+" in src or "@-" in src else 0) + pcrel, 2
+    if mn.startswith("move"):
+        parts = ops.rsplit(",", 1)
+        src, dst = (parts + [""])[:2] if len(parts) == 2 else (ops, "")
+        si, di = bool(INDEXED.search(src)), bool(INDEXED.search(dst))
+        if si and di:
+            return 0, 8
+        if si:
+            return 0, 5 if "@" in dst else 3
+        if di:
+            return 0, 4 if "@" in src else 3
+        if "@" in src and "@" in dst:
+            return 1 + pcrel, 1
+        return pcrel, 1
+    return pcrel, 1 + idx
+
+
 HARNESS = {"decode_one", "main", "crc_init", "report", "read_file", "io_read", "io_seek", "cb_read", "cb_seek", "cb_tell",
            "cb_close", "say", "say_dec", "say_hex", "eq_on", "_start", "?"}
 LIBC = {"memcpy", "memmove", "memset", "memcmp", "strlen", "strcpy", "strcat", "memchr", "qsort"}
 
 IN_RE = re.compile(r"^IN:\s*(\S*)")
-INSN_RE = re.compile(r"^0x([0-9a-f]+):\s+(\S+)")
+INSN_RE = re.compile(r"^0x([0-9a-f]+):\s+(\S+)\s*(.*)")
 EXEC_RE = re.compile(r"^Trace \d+: 0x[0-9a-f]+ \[[0-9a-f]+/([0-9a-f]+)/")
-
-
-def weight(mn):
-    for rx, w in WEIGHTS:
-        if rx.match(mn):
-            return w
-    return 1
+TARGET_RE = re.compile(r"0x([0-9a-f]+)\s*$")
+CLOCK_HZ = 33333333.0           # reloj del 68040 del Quadra 800 de Snow y del LC 580 (dato de EveryMac, por verificar)
+ICACHE_MISS = 15                # ciclos de traer una línea de 16 bytes de la RAM en el Quadra 800 de Snow (6-3-3-3)
 
 
 def load_symbols(elf, nm):
@@ -60,36 +143,70 @@ def load_symbols(elf, nm):
     return addrs, names
 
 
+class Tb:
+    __slots__ = ("fn", "pc", "insns", "cyc", "muls", "target", "lines", "prev", "execs", "taken", "imiss")
+
+    def __init__(self, fn):
+        self.fn, self.pc, self.insns, self.cyc, self.muls = fn, None, 0, 0, 0
+        self.target, self.lines, self.prev = None, (), 2
+        self.execs = self.taken = self.imiss = 0
+
+
 def profile(cmd, syms=None):
-    """Devuelve ({función: [instr, ciclos, mul]}, salida del programa)."""
+    """Devuelve ({función: [instr, ciclos, mul, fallos del caché de instrucciones]}, salida del programa)."""
     tmp = tempfile.mkdtemp(prefix="qemu_hot_")
     fifo = os.path.join(tmp, "trace")
     os.mkfifo(fifo)
     proc = subprocess.Popen([cmd[0], "-d", "in_asm,exec,nochain", "-D", fifo] + cmd[1:],
                             stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-    tb, execs, cur = {}, {}, None
+    tbs, cur, last = {}, None, None
+    # caché de instrucciones del 68040: 64 conjuntos de 4 líneas de 16 bytes; el reemplazo real usa un contador que aquí
+    # se aproxima con uno que avanza en cada fallo
+    sets = [[-1, -1, -1, -1] for _ in range(64)]
+    victim = 0
     with open(fifo, "r", errors="replace") as f:
         for line in f:
             if cur is not None:
                 m = INSN_RE.match(line)
                 if m:
-                    if cur[1] is None:
-                        cur[1] = int(m.group(1), 16)
-                    mn = m.group(2)
-                    cur[2] += 1
-                    cur[3] += weight(mn)
-                    cur[4] += 1 if MULS.match(mn) else 0
+                    addr, mn, ops = int(m.group(1), 16), m.group(2), m.group(3).strip()
+                    if cur.pc is None:
+                        cur.pc = addr
+                        cur.lines = [addr >> 4]
+                    elif cur.lines[-1] != addr >> 4:
+                        cur.lines.append(addr >> 4)
+                    if (addr + 2) >> 4 != cur.lines[-1]:
+                        cur.lines.append((addr + 2) >> 4)
+                    cur.insns += 1
+                    lead, base = insn_cost(mn, ops)
+                    cur.cyc += base + max(0, lead - (cur.prev - 1))
+                    cur.prev = base or 2
+                    cur.muls += 1 if MULS.match(mn) else 0
+                    if COND.match(mn):
+                        t = TARGET_RE.search(ops)
+                        cur.target = int(t.group(1), 16) if t else None
                     continue
-                tb[cur[1]] = (cur[2], cur[3], cur[4], cur[0] or "?")
+                tbs[cur.pc] = cur
                 cur = None
-            m = IN_RE.match(line)
-            if m:
-                cur = [m.group(1), None, 0, 0, 0]
-                continue
             m = EXEC_RE.match(line)
             if m:
                 pc = int(m.group(1), 16)
-                execs[pc] = execs.get(pc, 0) + 1
+                if last is not None and last.target == pc:
+                    last.taken += 1
+                tb = tbs.get(pc)
+                last = tb
+                if tb is not None:
+                    tb.execs += 1
+                    for ln in tb.lines:
+                        ways = sets[ln & 63]
+                        if ln not in ways:
+                            ways[victim & 3] = ln
+                            victim += 1
+                            tb.imiss += 1
+                continue
+            m = IN_RE.match(line)
+            if m:
+                cur = Tb(m.group(1) or "?")
     out, err = proc.communicate()
     os.unlink(fifo)
     os.rmdir(tmp)
@@ -97,19 +214,21 @@ def profile(cmd, syms=None):
         sys.stderr.write(err)
         sys.exit("qemu_hot: el programa terminó con código %d" % proc.returncode)
     per = {}
-    for pc, n in execs.items():
-        info = tb.get(pc)
-        if info is None:
+    for pc, tb in tbs.items():
+        if not tb.execs:
             continue
-        insns, cyc, muls, fn = info
+        fn = tb.fn
         if fn == "?" and syms is not None:                  # asm sin tipo de función: se busca por dirección
             k = bisect.bisect_right(syms[0], pc) - 1
             if k >= 0:
                 fn = syms[1][k]
-        r = per.setdefault(fn, [0, 0, 0])
-        r[0] += n * insns
-        r[1] += n * cyc
-        r[2] += n * muls
+        r = per.setdefault(fn, [0, 0, 0, 0])
+        r[0] += tb.execs * tb.insns
+        r[1] += tb.execs * tb.cyc
+        if tb.target is not None:                           # salto condicional final: 2 ciclos si salta, 3 si no
+            r[1] += 2 * tb.taken + 3 * (tb.execs - tb.taken)
+        r[2] += tb.execs * tb.muls
+        r[3] += tb.imiss
     return per, out
 
 
@@ -127,6 +246,7 @@ def main():
     ap.add_argument("--elf", help="ELF del programa, para ponerle nombre a las funciones de asm que QEMU no nombra")
     ap.add_argument("--nm", default=os.path.expanduser("~/Retro68-build/toolchain/bin/m68k-apple-macos-nm"))
     ap.add_argument("--unit", type=int, default=1, help="muestras por canal que vale cada 'cuadro' que informa el programa (MP3: 1152)")
+    ap.add_argument("--rate", type=int, default=44100, help="Hz del audio de entrada, para el porcentaje de tiempo real")
     ap.add_argument("cmd", nargs=argparse.REMAINDER)
     a = ap.parse_args()
     cmd = a.cmd[1:] if a.cmd and a.cmd[0] == "--" else a.cmd
@@ -141,34 +261,40 @@ def main():
         sys.exit("qemu_hot: la corrida larga no produjo más cuadros (%d y %d)" % (fa, fb))
     per = {}
     for fn in set(pa) | set(pb):
-        x = pa.get(fn, [0, 0, 0])
-        y = pb.get(fn, [0, 0, 0])
-        d = [y[0] - x[0], y[1] - x[1], y[2] - x[2]]
+        x = pa.get(fn, [0, 0, 0, 0])
+        y = pb.get(fn, [0, 0, 0, 0])
+        d = [y[k] - x[k] for k in range(4)]
         if fn in HARNESS or d[0] <= 0:
             continue
         per[fn] = d
     tot_i = sum(r[0] for r in per.values()) or 1
     tot_c = sum(r[1] for r in per.values()) or 1
     tot_m = sum(r[2] for r in per.values())
+    tot_x = sum(r[3] for r in per.values())
     samples = (fb - fa) * a.unit
-    rows = sorted(per.items(), key=lambda kv: -kv[1][0])
+    budget = CLOCK_HZ / a.rate
+    rows = sorted(per.items(), key=lambda kv: -kv[1][1])
+    cyc = tot_c / samples
+    icache = tot_x * ICACHE_MISS / samples
     print("# %s" % a.label)
-    print("# costo marginal de %d cuadros (%d muestras por canal): %d instrucciones = %.1f instr/muestra-canal, %.2f mul*/muestra-canal"
-          % (fb - fa, samples, tot_i, tot_i / samples, tot_m / samples))
-    print("# (conteo de instrucciones, NO tiempo; sin inicialización ni arnés de prueba)")
-    print("# %-34s %8s %8s %10s %10s" % ("función", "% instr", "% est.", "instr/m-c", "mul*/m-c"))
-    for fn, (i, c, m) in rows[:a.top]:
+    print("# costo marginal de %d cuadros (%d muestras por canal): %.1f instr, %.2f mul* y %.0f ciclos del modelo por muestra-canal"
+          % (fb - fa, samples, tot_i / samples, tot_m / samples, cyc))
+    print("# modelo (MC68040UM sec. 10 como lo cobra Snow, SIN caché de datos): %.0f ciclos + %.0f de fallos del caché de instrucciones"
+          " = %.0f%% del tiempo real a 33,33 MHz y %d Hz (presupuesto %.0f)"
+          % (cyc, icache, 100.0 * (cyc + icache) / budget, a.rate, budget))
+    print("# NO es una medición: ni de Snow (falta el caché de datos) ni del LC 580. Sin inicialización ni arnés de prueba.")
+    print("# %-34s %8s %10s %10s %10s %8s" % ("función", "% ciclos", "ciclos/m-c", "instr/m-c", "mul*/m-c", "i-miss"))
+    for fn, (i, c, m, x) in rows[:a.top]:
         tag = " (libc simulada)" if fn in LIBC else ""
-        print("  %-34s %7.1f%% %7.1f%% %10.2f %10.3f" % ((fn + tag)[:34], 100.0 * i / tot_i, 100.0 * c / tot_c, i / samples, m / samples))
-    rest = sum(r[0] for _, r in rows[a.top:])
+        print("  %-34s %7.1f%% %10.1f %10.2f %10.3f %8.3f" % ((fn + tag)[:34], 100.0 * c / tot_c, c / samples, i / samples, m / samples, x / samples))
+    rest = sum(r[1] for _, r in rows[a.top:])
     if rest:
-        print("  %-34s %7.1f%%" % ("(otras %d funciones)" % (len(rows) - a.top), 100.0 * rest / tot_i))
-    print("# '%% est.' usa pesos SUPUESTOS por verificar: mulsl/mulul=20, mulsw=5, div*=40, bf*=15, el resto 1")
+        print("  %-34s %7.1f%% %10.1f" % ("(otras %d funciones)" % (len(rows) - a.top), 100.0 * rest / tot_c, rest / samples))
     if a.csv:
         with open(a.csv, "w") as fh:
-            fh.write("funcion,instr_por_muestra_canal,mul_por_muestra_canal,ciclos_supuestos_por_muestra_canal\n")
-            for fn, (i, c, m) in rows:
-                fh.write("%s,%.3f,%.4f,%.3f\n" % (fn, i / samples, m / samples, c / samples))
+            fh.write("funcion,instr_por_muestra_canal,mul_por_muestra_canal,ciclos_modelo_por_muestra_canal,fallos_icache_por_muestra_canal\n")
+            for fn, (i, c, m, x) in rows:
+                fh.write("%s,%.3f,%.4f,%.3f,%.4f\n" % (fn, i / samples, m / samples, c / samples, x / samples))
 
 
 if __name__ == "__main__":

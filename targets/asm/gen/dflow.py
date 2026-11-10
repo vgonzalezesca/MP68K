@@ -97,8 +97,20 @@ def store(mem, a):
     return s
 
 
+def prune(prog):
+    """Quita las operaciones cuyo resultado no llega a ninguna escritura en memoria (código muerto)."""
+    live = set()
+    for op in reversed(prog.ops):
+        if op.kind == "store" or op.id in live:
+            live.add(op.id)
+            for a in op.args:
+                live.add(a.id)
+    prog.ops = [op for op in prog.ops if op.id in live]
+
+
 def emit_kernel(prog, name, prologue, epilogue, frame_slots_extra=0):
     """Devuelve el texto del cuerpo (entre prólogo y epílogo) y el número de huecos de pila usados."""
+    prune(prog)
     ops = prog.ops
     uses = {s.id: [] for s in prog.syms}
     for i, op in enumerate(ops):

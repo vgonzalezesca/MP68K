@@ -4,7 +4,7 @@
 # ES UN CONTEO DE INSTRUCCIONES, NO TIEMPO: sirve para decidir dónde escribir asm y para comparar antes/después, no para decir
 # "más rápido" (eso solo lo dice una medición en el LC 580). Ver targets/asm/prof/qemu_hot.py.
 #
-# Uso: targets/asm-prof.sh [caso ...]        casos: mp3 mp3half mp3halforig mp3orig mp3ref mp3eq mp3b192 vorbis vorbismono wma2 wma1 flac flacmono flac24   (por omisión, todos)
+# Uso: targets/asm-prof.sh [caso ...]        casos: mp3 mp3half mp3halflibmad mp3mono mp3halfmono mp3halforig mp3orig mp3ref mp3eq mp3b192 vorbis vorbismono wma2 wma1 flac flacmono flac24   (por omisión, todos)
 # Requiere los binarios de targets/asm-test.sh (se generan si faltan).
 set -euo pipefail
 
@@ -19,7 +19,7 @@ HOT=$ROOT/targets/asm/prof/qemu_hot.py
 
 [[ -x $OUT/e2e_asm && -x $OUT/vorbis_e2e && -x $OUT/wma_e2e_asm && -x $OUT/flac_e2e ]] || "$ROOT/targets/asm-test.sh" mp3_e2e vorbis_e2e wma_e2e flac_e2e >/dev/null
 CASES=("$@")
-[[ ${#CASES[@]} -gt 0 ]] || CASES=(mp3 mp3half mp3halforig mp3orig mp3ref mp3eq mp3b192 vorbis vorbismono wma2 wma1 flac flacmono flac24)
+[[ ${#CASES[@]} -gt 0 ]] || CASES=(mp3 mp3half mp3halflibmad mp3mono mp3halfmono mp3halforig mp3orig mp3ref mp3eq mp3b192 vorbis vorbismono wma2 wma1 flac flacmono flac24)
 
 run() { # etiqueta unidad f1 f2 binario args...   (los args llevan {FRAMES})
     local label=$1 unit=$2 f1=$3 f2=$4 bin=$5; shift 5
@@ -31,7 +31,10 @@ run() { # etiqueta unidad f1 f2 binario args...   (los args llevan {FRAMES})
 for c in "${CASES[@]}"; do
     case $c in
         mp3)       run "MP3 128 kbps, nucleos asm"          1152 $MP3_A $MP3_B e2e_asm --nohalf --frames={FRAMES} tests/data/test128.mp3 ;;
-        mp3half)   run "MP3 128 kbps, media tasa (HALF), asm"       1152 $MP3_A $MP3_B e2e_asm --onlyhalf --frames={FRAMES} tests/data/test128.mp3 ;;
+        mp3half)   run "MP3 128 kbps, HALF del reproductor (16 subbandas), asm"  1152 $MP3_A $MP3_B e2e_asm --mode=halfcap --frames={FRAMES} tests/data/test128.mp3 ;;
+        mp3halflibmad) run "MP3 128 kbps, synth_half de libmad sin limite de subbandas, asm" 1152 $MP3_A $MP3_B e2e_asm --onlyhalf --frames={FRAMES} tests/data/test128.mp3 ;;
+        mp3mono)   run "MP3 128 kbps estereo, MONO del reproductor, asm"   1152 $MP3_A $MP3_B e2e_asm --mode=mono --frames={FRAMES} tests/data/test128.mp3 ;;
+        mp3halfmono) run "MP3 128 kbps estereo, HALF_MONO del reproductor, asm" 1152 $MP3_A $MP3_B e2e_asm --mode=halfmono --frames={FRAMES} tests/data/test128.mp3 ;;
         mp3halforig) run "MP3 128 kbps, media tasa, libmad ORIGINAL" 1152 $MP3_A $MP3_B e2e_orig --onlyhalf --frames={FRAMES} tests/data/test128.mp3 ;;
         mp3orig)   run "MP3 128 kbps, libmad ORIGINAL (C puro)" 1152 $MP3_A $MP3_B e2e_orig --nohalf --frames={FRAMES} tests/data/test128.mp3 ;;
         mp3ref)    run "MP3 128 kbps, mis referencias en C"   1152 $MP3_A $MP3_B e2e_ref --nohalf --frames={FRAMES} tests/data/test128.mp3 ;;

@@ -27,8 +27,9 @@ Objetivo y presupuesto: `docs/SPECS_68K.md`. Datos del equipo: `docs/HARDWARE_LC
 | `microbench.c` | microbenchmarks de instrucciones 68k |
 | `qttest.c` | Fase 6: ¿hay QuickTime y qué audio abre? Solo funciones ya declaradas por las Multiversal; sin selectores inventados (sin probar en un Mac) |
 | `check-nofpu.sh`, `package-visit.sh` | comprobación de FPU; paquete para llevar al LC 580 |
-| `asm/` | kernels 68040: `synth_window_040.s`, `pcm_040.s` (a mano) y `dct32_040.s`, `imdct_l_040.s` (generados por `asm/gen/`); ADR-014 |
+| `asm/` | kernels 68040: MP3 (ventanas exactas y de 16 bits, DCT32 completo y de media tasa, IMDCT larga, PCM), EQ y WMA; los `dct32*` e `imdct_l` los genera `asm/gen/`, y las ventanas de 16 bits se derivan de las exactas; ADR-014 |
 | `asm-test.sh` | prueba bit a bit de los kernels y decodificaciones completas bajo `qemu-m68k` (solo corrección, no tiempos) |
+| `asm-prof.sh`, `asm/prof/qemu_hot.py` | perfil por función bajo QEMU con el modelo de ciclos del MC68040UM que usa Snow (sin caché de datos): estimación, no medición |
 
 ## Compilar
 

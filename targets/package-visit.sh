@@ -16,7 +16,7 @@ OUT=$ROOT/dist/visita1
 rm -rf "$OUT"
 mkdir -p "$OUT/mp3"
 
-for app in sysprobe microbench decbench decprofile audiotest codecbench codecbench_ref mp368k segtest qttest; do
+for app in sysprobe microbench decbench decprofile audiotest audiotest_ref codecbench codecbench_ref mp368k segtest qttest; do
     for f in "$ROOT/dist/68k/$app/$app.bin" "$ROOT/dist/68k/$app/$app.dsk"; do
         [[ -f $f ]] || { echo "falta $f: ejecute tools/build.sh" >&2; exit 1; }
     done
@@ -37,7 +37,7 @@ for f in test128.mp3 test192.mp3 testmono.mp3 testflac.flac testflacmono.flac te
 done
 
 # Copias de las apps junto a los archivos que leen (sin esto salía "no se pudo abrir (err=-43)" y "sin REFERENCE").
-for app in decbench decprofile audiotest; do cp "$ROOT/dist/68k/$app/$app.bin" "$OUT/mp3/"; done
+for app in decbench decprofile audiotest audiotest_ref; do cp "$ROOT/dist/68k/$app/$app.bin" "$OUT/mp3/"; done
 for app in codecbench codecbench_ref; do cp "$ROOT/dist/68k/$app/$app.bin" "$OUT/audio/"; done
 
 # qttest busca los clips junto a la aplicación. Clips de 6 s hechos de mix.wav con sox/ffmpeg (ninguno es MP3, FLAC, Ogg ni WMA).
@@ -59,7 +59,7 @@ fi
 
 (cd "$OUT" && find . -type f | sort | xargs ls -l | awk '{print $5, $9}')
 echo
-echo "CORRER desde mp3/ (decbench, decprofile, audiotest) y desde audio/ (codecbench, codecbench_ref): ahí están sus archivos y su REFERENCE*.txt."
+echo "CORRER desde mp3/ (decbench, decprofile, audiotest, audiotest_ref) y desde audio/ (codecbench, codecbench_ref): ahí están sus archivos y su REFERENCE*.txt."
 echo "qttest: correr desde qt/ (ahí están sus clips); devolver qttest.txt. Anotar a mano cuáles SONARON: el programa no puede oírlo."
 echo "CRC-32 esperados de los MP3 (decbench los imprime para comprobar la transferencia):"
 grep -h '^bench,[^,]*,[^,]*,FULL,' "$ROOT/tests/data/REFERENCE.txt" | cut -d, -f2,3

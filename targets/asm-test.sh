@@ -28,16 +28,17 @@ LD=$BIN/m68k-apple-macos-ld.real
 LIBGCC=$("$GCC" -m68040 -msoft-float -print-libgcc-file-name)
 
 # prueba : fuentes C de la referencia : fuentes asm del kernel
-declare -A REF=( [synth_window]="src/synth_ref.c" [synth_window_half]="src/synth_ref.c" [dct32]="src/dct32_ref.c" [imdct_l]="src/imdct_ref.c" [pcm]="src/pcm_ref.c" [eq_mulg]="src/eq_ref.c" [wma_window]="src/wma_ref.c" [wma_fft]="src/wma_ref.c" )
-declare -A ASM=( [synth_window]="targets/asm/synth_window_040.s" [synth_window_half]="targets/asm/synth_window_half_040.s" [dct32]="targets/asm/dct32_040.s" [imdct_l]="targets/asm/imdct_l_040.s" [pcm]="targets/asm/pcm_040.s" [eq_mulg]="targets/asm/eq_040.s" [wma_window]="targets/asm/wma_window_040.s" [wma_fft]="targets/asm/wma_fft_040.s" )
+declare -A REF=( [synth_window]="src/synth_ref.c" [synth_window_half]="src/synth_ref.c" [synth_window_half16]="src/synth_ref.c" [synth_window_full16]="src/synth_ref.c" [dct32]="src/dct32_ref.c" [dct32_half]="src/dct32_ref.c" [imdct_l]="src/imdct_ref.c" [pcm]="src/pcm_ref.c" [eq_mulg]="src/eq_ref.c" [wma_window]="src/wma_ref.c" [wma_fft]="src/wma_ref.c" )
+declare -A ASM=( [synth_window]="targets/asm/synth_window_040.s" [synth_window_half]="targets/asm/synth_window_half_040.s" [synth_window_half16]="targets/asm/synth_window_half16_040.s" [synth_window_full16]="targets/asm/synth_window_full16_040.s" [dct32]="targets/asm/dct32_040.s" [dct32_half]="targets/asm/dct32_half_040.s" [imdct_l]="targets/asm/imdct_l_040.s" [pcm]="targets/asm/pcm_040.s" [eq_mulg]="targets/asm/eq_040.s" [wma_window]="targets/asm/wma_window_040.s" [wma_fft]="targets/asm/wma_fft_040.s" )
 TESTS=("$@")
-[[ ${#TESTS[@]} -gt 0 ]] || TESTS=(synth_window synth_window_half dct32 imdct_l pcm eq_mulg wma_window wma_fft mp3_e2e vorbis_e2e wma_e2e flac_e2e)
+[[ ${#TESTS[@]} -gt 0 ]] || TESTS=(synth_window synth_window_half synth_window_half16 synth_window_full16 dct32 dct32_half imdct_l pcm eq_mulg wma_window wma_fft mp3_e2e vorbis_e2e wma_e2e flac_e2e)
 
 "$AS" -m68040 "$ROOT/tests/asm/start.s" -o "$OUT/start.o"
 "$AS" -m68040 "$ROOT/tests/asm/shim.s" -o "$OUT/shim.o"
 
 # Decodificación de MP3 completos con libmad (copia parcheada) bajo qemu: el PCM de la síntesis con el kernel asm
-# (y con la referencia en C) debe dar el MISMO CRC que la libmad original compilada en el PC.
+# (y con la referencia en C) debe dar el MISMO CRC que la misma copia compilada en el PC, en los 5 modos de
+# test_mp3_e2e.c. En full y half esa copia da lo mismo que la libmad original (lo comprueba check_codecs.py contra hostdec).
 mp3_e2e() {
     local mad=$OUT/libmad lib=(bit fixed frame huffman layer12 layer3 stream synth timer version) f v name o
     local files=() srcs=() objs
@@ -52,12 +53,15 @@ mp3_e2e() {
     for f in "${lib[@]}"; do srcs+=("$mad/$f.c"); done
     # referencia: PC, síntesis original de libmad
     gcc -O2 -w -DMP368K_HOSTREF -DNDEBUG -DHAVE_LIMITS_H -DFPM_64BIT -DSIZEOF_INT=4 -DSIZEOF_LONG=8 -DSIZEOF_LONG_LONG=8 \
-        -I"$OUT/madh64" -I"$mad" -I"$ROOT/src" "${srcs[@]}" "$ROOT/src/eq.c" "$ROOT/src/eq_ref.c" "$ROOT/tests/asm/test_mp3_e2e.c" -o "$OUT/e2e_host"
+        -DMP368K_SYNTH_WINDOW_HALF16=mp368k_synth_window_half16_ref -DMP368K_SYNTH_WINDOW_FULL16=mp368k_synth_window_full16_ref \
+        -I"$OUT/madh64" -I"$mad" -I"$ROOT/src" "${srcs[@]}" "$ROOT/src/eq.c" "$ROOT/src/eq_ref.c" "$ROOT/src/synth_ref.c" \
+        "$ROOT/tests/asm/test_mp3_e2e.c" -o "$OUT/e2e_host"
     # la ultima corrida usa el ecualizador (ajustes de codecbench): comprueba tambien el EQ en big-endian
     (cd "$ROOT" && "$OUT/e2e_host" "${files[@]}" --eq "${files[0]}") > "$OUT/e2e_host.txt"
     local rc_e2e=0 defs kern
-    for v in "orig||" "ref|-DMP368K_SYNTH_WINDOW=mp368k_synth_window_full_ref -DMP368K_SYNTH_WINDOW_HALF=mp368k_synth_window_half_ref -DMP368K_DCT32=mp368k_dct32_ref -DMP368K_IMDCT_L=mp368k_imdct_l_ref|src/synth_ref.c src/dct32_ref.c src/imdct_ref.c" \
-             "asm|-DMP368K_SYNTH_WINDOW=mp368k_synth_window_full_040 -DMP368K_SYNTH_WINDOW_HALF=mp368k_synth_window_half_040 -DMP368K_DCT32=mp368k_dct32_040 -DMP368K_IMDCT_L=mp368k_imdct_l_040|targets/asm/synth_window_040.s targets/asm/synth_window_half_040.s targets/asm/dct32_040.s targets/asm/imdct_l_040.s"; do
+    # "orig": la síntesis de libmad; las ventanas de 16x16 bits de los perfiles reducidos no existen ahí y van siempre en C
+    for v in "orig|-DMP368K_SYNTH_WINDOW_HALF16=mp368k_synth_window_half16_ref -DMP368K_SYNTH_WINDOW_FULL16=mp368k_synth_window_full16_ref|src/synth_ref.c" "ref|-DMP368K_SYNTH_WINDOW_HALF16=mp368k_synth_window_half16_ref -DMP368K_SYNTH_WINDOW_FULL16=mp368k_synth_window_full16_ref -DMP368K_SYNTH_WINDOW=mp368k_synth_window_full_ref -DMP368K_SYNTH_WINDOW_HALF=mp368k_synth_window_half_ref -DMP368K_DCT32=mp368k_dct32_ref -DMP368K_IMDCT_L=mp368k_imdct_l_ref|src/synth_ref.c src/dct32_ref.c src/imdct_ref.c" \
+             "asm|-DMP368K_SYNTH_WINDOW=mp368k_synth_window_full_040 -DMP368K_SYNTH_WINDOW_HALF=mp368k_synth_window_half_040 -DMP368K_DCT32=mp368k_dct32_040 -DMP368K_DCT32_HALF=mp368k_dct32_half_040 -DMP368K_SYNTH_WINDOW_HALF16=mp368k_synth_window_half16_040 -DMP368K_SYNTH_WINDOW_FULL16=mp368k_synth_window_full16_040 -DMP368K_IMDCT_L=mp368k_imdct_l_040|targets/asm/synth_window_040.s targets/asm/synth_window_half_040.s targets/asm/synth_window_half16_040.s targets/asm/synth_window_full16_040.s targets/asm/dct32_040.s targets/asm/dct32_half_040.s targets/asm/imdct_l_040.s"; do
         IFS='|' read -r name defs kern <<<"$v"
         objs=("$OUT/start.o" "$OUT/shim.o" "$OUT/minilibc_$name.o")
         "$GCC" "${CFLAGS[@]}" -c "$ROOT/tests/asm/minilibc.c" -o "$OUT/minilibc_$name.o"
@@ -68,7 +72,7 @@ mp3_e2e() {
                 -I"$OUT/madh32" -I"$mad" -I"$ROOT/src" -c "$mad/$s.c" -o "$o"
             objs+=("$o")
         done
-        "$GCC" "${CFLAGS[@]}" -I"$OUT/madh32" -c "$ROOT/tests/asm/test_mp3_e2e.c" -o "$OUT/e2e_$name.o"; objs+=("$OUT/e2e_$name.o")
+        "$GCC" "${CFLAGS[@]}" -I"$OUT/madh32" -I"$mad" -c "$ROOT/tests/asm/test_mp3_e2e.c" -o "$OUT/e2e_$name.o"; objs+=("$OUT/e2e_$name.o")
         if [[ $name == asm ]]; then      # el EQ con su kernel de ganancia en asm
             "$GCC" "${CFLAGS[@]}" -DMP368K_EQ_MULG_RANGE=mp368k_eq_mulg_range_040 -c "$ROOT/src/eq.c" -o "$OUT/e2e_eq_$name.o"
             "$AS" -m68040 "$ROOT/targets/asm/eq_040.s" -o "$OUT/e2e_eq_k_$name.o"; objs+=("$OUT/e2e_eq_k_$name.o")
@@ -85,7 +89,7 @@ mp3_e2e() {
         "$LD" -m m68kelf -static -nostdlib -Ttext=0x80000000 -e _start "${objs[@]}" "$LIBGCC" -o "$OUT/e2e_$name"
         (cd "$ROOT" && "$QEMU" -cpu m68040 "$OUT/e2e_$name" "${files[@]}" --eq "${files[0]}") > "$OUT/e2e_$name.txt"
         if diff -u "$OUT/e2e_host.txt" "$OUT/e2e_$name.txt" >"$OUT/e2e_$name.diff"; then
-            echo "  OK    nucleos $name: CRC de la sintesis igual al de libmad original en ${#files[@]} archivos"
+            echo "  OK    nucleos $name: CRC de la sintesis igual al del PC en ${#files[@]} archivos y 5 modos (full y half: los de libmad original)"
         else
             echo "  FALLA nucleos $name:"; cat "$OUT/e2e_$name.diff"; rc_e2e=1
         fi

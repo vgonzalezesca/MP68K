@@ -8,6 +8,7 @@
 #include <stdint.h>
 #include "mad.h"
 #include "eq.h"
+#include "mp368k_l3.h"
 
 #ifdef MP368K_HOSTREF
 #include <stdio.h>
@@ -22,8 +23,14 @@ static struct mad_stream stream;
 static struct mad_frame frame;
 static struct mad_synth synth;
 static uint32_t crc_table[256];
-static int only_half;                   /* --onlyhalf: solo el perfil de media tasa (para perfilar) */
-static int no_half;                     /* --nohalf: solo el perfil completo (para perfilar) */
+/*
+ * Modos de decodificación (los de los perfiles del reproductor, src/codec_mp3.c): full = FULL; half = synth_half de libmad
+ * sin más; halfcap = HALF del reproductor (16 subbandas); mono = MONO (mezcla en frecuencia); halfmono = HALF_MONO. Los tres
+ * del reproductor usan la ventana de 16x16 bits.
+ */
+enum { M_FULL, M_HALF, M_HALFCAP, M_MONO, M_HALFMONO, M_COUNT };
+static const char *const kModeName[M_COUNT] = { "full", "half", "halfcap", "mono", "halfmono" };
+static unsigned modes = (1u << M_COUNT) - 1;    /* --nohalf, --onlyhalf, --mode=NOMBRE: para perfilar uno solo */
 static unsigned long max_frames;       /* --frames=N: tope de cuadros por archivo (0 = todo), para perfilar */
 
 static void crc_init(void)
@@ -104,8 +111,9 @@ static void report(const char *name, unsigned frames, uint32_t crc)
 #endif
 }
 
-static int decode_one(const char *path, int half)
+static int decode_one(const char *path, int mode)
 {
+    int half = mode == M_HALF || mode == M_HALFCAP || mode == M_HALFMONO;
     long n = read_file(path, filebuf, MAX_FILE);
     unsigned frames = 0, c, i;
     uint32_t crc = 0xFFFFFFFFu;
@@ -116,6 +124,9 @@ static int decode_one(const char *path, int half)
     mad_frame_init(&frame);
     mad_synth_init(&synth);
     stream.options = half ? MAD_OPTION_HALFSAMPLERATE : 0;
+    mp368k_l3_mono = mode == M_MONO || mode == M_HALFMONO;
+    mp368k_l3_maxsb = mode == M_HALFCAP || mode == M_HALFMONO ? 16 : 32;
+    mp368k_synth_lowprec = mode == M_HALFCAP || mode == M_MONO || mode == M_HALFMONO;
     mad_stream_buffer(&stream, filebuf, (unsigned long)n);
     for (;;) {
         if (max_frames && frames >= max_frames)
@@ -139,7 +150,7 @@ static int decode_one(const char *path, int half)
     mad_synth_finish(&synth);
     mad_frame_finish(&frame);
     mad_stream_finish(&stream);
-    report(half ? "half" : "full", frames, ~crc);
+    report(kModeName[mode], frames, ~crc);
     (void)path;
     return 0;
 }
@@ -174,17 +185,31 @@ int main(int argc, char **argv)
             } else if (argv[i][2] == 'e') {             /* --eq */
                 eq_on();
             } else if (argv[i][2] == 'n') {             /* --nohalf */
-                no_half = 1;
+                modes = 1u << M_FULL;
             } else if (argv[i][2] == 'o') {             /* --onlyhalf */
-                only_half = 1;
+                modes = 1u << M_HALF;
+            } else if (argv[i][2] == 'm') {             /* --mode=NOMBRE */
+                int m;
+
+                for (m = 0; m < M_COUNT; m++) {
+                    const char *a = argv[i] + 7, *b = kModeName[m];
+
+                    while (*a && *a == *b)
+                        a++, b++;
+                    if (!*a && !*b)
+                        modes = 1u << m;
+                }
             }
             continue;
         }
         report(argv[i], 0, 0);
-        if (!only_half)
-            rc |= decode_one(argv[i], 0);
-        if (!no_half)
-            rc |= decode_one(argv[i], 1);
+        {
+            int m;
+
+            for (m = 0; m < M_COUNT; m++)
+                if (modes & (1u << m))
+                    rc |= decode_one(argv[i], m);
+        }
     }
     return rc;
 }

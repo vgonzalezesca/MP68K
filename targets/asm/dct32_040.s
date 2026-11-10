@@ -1,4 +1,4 @@
-| dct32_040.s — DCT de 32 puntos de libmad en ensamblador 68040.
+| dct32_040.s — DCT de 32 puntos de libmad en ensamblador 68040: las 32 salidas.
 | GENERADO por targets/asm/gen/gen_dct32.py (dflow.py) desde third_party/libmad/synth.c: no editar a mano.
 | Referencia en C: src/dct32_ref.c (generada del mismo texto). Prueba: tests/asm/test_dct32.c bajo qemu-m68k.
 | SIN MEDIR en el LC 580: no se declara más rápido que la referencia hasta medirlo (ADR-008).

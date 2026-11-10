@@ -5,14 +5,16 @@ set(MP368K_CPU_FLAGS -m68040 -msoft-float)
 set(MP368K_OPT_FLAGS -O2 -fomit-frame-pointer -ffunction-sections -fdata-sections)
 # Se conservan los nombres para MacsBug (sin --mac-strip-macsbug) para depurar.
 set(MP368K_LINK_FLAGS -Wl,-gc-sections)
-set(MP368K_APPS sysprobe microbench decbench decprofile audiotest codecbench codecbench_ref mp368k segtest qttest)
+set(MP368K_APPS sysprobe microbench decbench decprofile audiotest audiotest_ref codecbench codecbench_ref mp368k segtest qttest)
 
 # Núcleos en ensamblador 68040 (ADR-008, ADR-014). Con -DMP368K_ASM=OFF el build usa la libmad original en C.
-# Con asm activo también se arma codecbench_ref (misma pila, libmad original) para compararlos en el mismo equipo.
+# Con asm activo también se arman codecbench_ref y audiotest_ref (misma pila en C) para compararlos en el mismo equipo.
 set(MP368K_ASM_KERNEL_SOURCES targets/asm/synth_window_040.s targets/asm/synth_window_half_040.s targets/asm/dct32_040.s
+    targets/asm/dct32_half_040.s targets/asm/synth_window_half16_040.s targets/asm/synth_window_full16_040.s
     targets/asm/imdct_l_040.s)
 set(MP368K_ASM_KERNEL_DEFS MP368K_SYNTH_WINDOW=mp368k_synth_window_full_040 MP368K_SYNTH_WINDOW_HALF=mp368k_synth_window_half_040 MP368K_DCT32=mp368k_dct32_040
-    MP368K_IMDCT_L=mp368k_imdct_l_040)
+    MP368K_DCT32_HALF=mp368k_dct32_half_040 MP368K_SYNTH_WINDOW_HALF16=mp368k_synth_window_half16_040
+    MP368K_SYNTH_WINDOW_FULL16=mp368k_synth_window_full16_040 MP368K_IMDCT_L=mp368k_imdct_l_040)
 
 # Conversiones de PCM: la de la salida de la síntesis se elige por pila (solo la pila asm); las de 8 bits y ganancia,
 # que usa la salida de audio, van en mp368k_common.

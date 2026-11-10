@@ -394,6 +394,34 @@ del 68k de Vorbis, WMA ni del EQ, se hizo uno: **`targets/asm-prof.sh`** corre l
   velocidad sería pequeño y a cambio agrega un modo en la interfaz, en la escalera de Automático y en las pruebas. Se retoma si el `microbench` del LC 580 muestra que
   `muls.l` es barato (entonces el conteo de instrucciones sí importa), o si Víctor lo quiere por la exactitud (el PCM sería más preciso, no menos).
 
+**Ronda 4 (2026-11-09): perfiles reducidos a la medida del 68040.** Víctor midió `microbench` y `audiotest` en **Snow** (Infinite Mac, Quadra 800) y pidió
+"optimizar todo lo que se pueda". Snow implementa los tiempos de la sección 10 del MC68040UM y cachés de 4 KB (se leyó su código), así que sirve de **modelo**, no de
+medición del LC 580. Su `microbench` dio `muls.l` = 20 ciclos y `muls.w` = 16. Consecuencia aritmética: el MP3 FULL hace ~49 multiplicaciones por cuadro estéreo
+(~980 ciclos) frente a un presupuesto de 756, **así que FULL estéreo a 44,1 kHz no llega a tiempo real en ningún 68040 de 33 MHz** con la aritmética de libmad, y el trabajo
+se centró en los perfiles reducidos (el LC 580 tiene, según las fuentes, salida de 8 bits; ver `docs/HARDWARE_LC580.md`).
+- **Modelo de ciclos.** `targets/asm/prof/qemu_hot.py` ahora cobra los tiempos de Snow por instrucción y simula el caché de instrucciones; calibrado con el `audiotest`
+  de Snow (Snow ≈ 1,25 × modelo, por el caché de datos que no modela). Tabla en `docs/PERF_LOG.md`. **Estimación, no medición.**
+- **Exacto para todos los perfiles (FULL sigue idéntico a libmad):** la alias-reduction y el estéreo M/S solo recorren la zona no nula que deja la decodificación Huffman
+  (`third_party/patches/libmad-0.15.1b-l3.patch`); las mariposas sobre ceros dan ceros. **DCT32 de media tasa** (`targets/asm/dct32_half_040.s`, generado con
+  eliminación de código muerto en `dflow.py`): solo escribe las 16 filas que lee `synth_half` (lo pares, hi impares), 162 operaciones y 32 multiplicaciones en vez de 370 y 80.
+- **Cambian el PCM de HALF, MONO y HALF_MONO (FULL no):**
+  - HALF deja pasar solo las 16 subbandas bajas (`mp368k_l3_maxsb`): la IMDCT, la alias-reduction y la síntesis no tocan las altas, y la media tasa ya no las pliega
+    encima. Contra el FULL filtrado a fs/2 por sox, la SNR sube de 24,5 dB (synth_half de libmad) a 39,7 dB.
+  - MONO mezcla (L+R)/2 **antes** de la IMDCT (`mp368k_l3_mono`); en estéreo M/S puro, (L+R)/2 = M/√2 y el canal S ni se decodifica (se saltan sus bits). Si L y R
+    tienen bloques distintos (solo en estéreo simple) se procesan los dos y se mezclan las subbandas, con las colas del solapado ajustadas para que no haya salto.
+  - Los tres usan una **ventana de 16×16 bits** (`targets/asm/synth_window_half16_040.s` y `_full16_040.s`, derivadas de las exactas; referencias en `src/synth_ref.c`):
+    `muls.w` sobre la palabra alta de cada valor y la tabla D redondeada a 16 bits, sin desplazamientos. 60,8 dB de SNR contra la ventana exacta (6 LSB eficaces en 16 bits),
+    muy por debajo del error de la media tasa y de una salida de 8 bits (48 dB).
+  - Criterios nuevos en `tests/host/check_codecs.py`: FULL idéntico a `hostdec`; MONO ≥ 55 dB contra (L+R)/2 del FULL; HALF y HALF_MONO ≥ 35 dB contra el FULL filtrado
+    por sox y ≥ 10 dB mejor que la synth_half de libmad. Bajo QEMU, los 5 modos de `test_mp3_e2e.c` dan el mismo CRC como 68040 que en el PC, con núcleos en C y en asm.
+- **Resultado en el modelo** (128 kbps estéreo): FULL 217 → 206 %, HALF 154 → 101 %, MONO ~140 → 88 %, HALF_MONO ~100 → 52 % del tiempo real. Si la relación con
+  Snow se mantiene, **HALF_MONO cabría en tiempo real en Snow (~65 %) y HALF y MONO quedarían al borde (~110-126 %)**: sin medir.
+- **`audiotest` usa ahora la pila del reproductor** (antes, la libmad original): mide lo que suena en `mp368k`. Agrega MONO y HALF_MONO y la línea `synth_kernel`;
+  `audiotest_ref` es lo mismo con la pila en C, para comparar C y asm en el mismo equipo.
+- **Descartado o pendiente:** acumular la ventana exacta en 64 bits (no reduce multiplicaciones); empaquetar dos productos en un `muls.l` (el operando de 32 bits no deja
+  espacio); la IMDCT de 16 bits (la entrada necesita más rango). Siguiente candidato por peso en HALF: la decodificación Huffman (~18 %), la IMDCT larga (~21 %, ya en asm,
+  ~79 multiplicaciones por subbanda) y la alias-reduction en asm (~7 %).
+
 **Consecuencias.** El código crece (en `mp368k`, de 197 a 283 KB de CODE con Vorbis y WMA; el segmento Main supera el 226 KB que `segtest`
 probó en Infinite Mac). Los núcleos generados se regeneran con `targets/asm/gen/gen_*.py` si cambia libmad. **Sin medir en el LC 580:
 ningún núcleo se declara más rápido que la referencia.** QEMU no modela tiempos ni cachés: solo prueba corrección.

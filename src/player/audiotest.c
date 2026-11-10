@@ -10,6 +10,9 @@
  *
  * Qué hay que mirar: (1) que suene; (2) underruns en 0; (3) cuánto del tiempo de un frame
  * ocupa decodificarlo (decode_load); (4) el formato negociado (bits, versión del Sound Manager).
+ *
+ * Decodifica con la MISMA pila que el reproductor (libmad parcheada, con los núcleos asm si el build los trae, y los perfiles
+ * reducidos de la capa III). audiotest_ref es el mismo programa con la pila en C, para comparar las dos en el mismo equipo.
  */
 #include <Gestalt.h>
 #include <Events.h>
@@ -33,7 +36,10 @@
 #define READ_BUF_BYTES (32L * 1024)
 #define EXTRA_STACK    (48L * 1024)
 #define MIN_STACK      (24L * 1024)
-#define OUT_NAME       "audiotest_results.txt"
+#ifndef AUDIOTEST_OUT_NAME
+# define AUDIOTEST_OUT_NAME "audiotest_results.txt"
+#endif
+#define OUT_NAME       AUDIOTEST_OUT_NAME
 
 typedef struct {
     const char *file;
@@ -44,6 +50,8 @@ typedef struct {
 static const Track kTracks[] = {
     { "test128.mp3", DEC_PROFILE_FULL, 0 },
     { "test128.mp3", DEC_PROFILE_HALF, 0 },
+    { "test128.mp3", DEC_PROFILE_MONO, 0 },
+    { "test128.mp3", DEC_PROFILE_HALF_MONO, 0 },
     { "test192.mp3", DEC_PROFILE_FULL, 0 },
     { "testmono.mp3", DEC_PROFILE_FULL, 0 },
     { "test128.mp3", DEC_PROFILE_HALF, 8 },     /* fuerza la ruta de 8 bits */
@@ -245,6 +253,9 @@ int main(void)
     textlog_init();
     textlog_printf("# MP368K audiotest (etapa 5a)\n");
     textlog_printf("build: %s %s %s %s\n", MP368K_BUILD_ID, __DATE__, __TIME__, MP368K_BUILD_FLAGS);
+#ifdef MP368K_SYNTH_KERNEL_LABEL
+    textlog_printf("synth_kernel: %s\n", MP368K_SYNTH_KERNEL_LABEL);
+#endif
     textlog_printf("machine: mach=%ld proc=%ld fpu=%ld sysv=0x%lX ram_kb=%ld\n",
                    gestalt_val(gestaltMachineType), gestalt_val(gestaltProcessorType),
                    gestalt_val(gestaltFPUType), (unsigned long)gestalt_val(gestaltSystemVersion),

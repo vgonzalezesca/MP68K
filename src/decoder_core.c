@@ -7,6 +7,10 @@
 #endif
 
 #include <mad.h>
+#if defined(MP368K_L3)
+/* copia parcheada de libmad (tools/prepare-libmad-eq.sh): mono en frecuencia y límite de subbandas */
+# include "mp368k_l3.h"
+#endif
 
 #include <string.h>
 
@@ -137,6 +141,24 @@ static size_t id3v2_length(const uint8_t *d, size_t size)
 /* Mezcla L+R en las subbandas y deja el frame como de un solo canal. */
 static void mix_to_mono(struct mad_frame *frame);
 
+/*
+ * Opciones de la capa III de la copia parcheada de libmad para un perfil. MONO mezcla L y R antes de la IMDCT (y en
+ * estéreo M/S ni decodifica el canal S); HALF deja pasar solo las 16 subbandas bajas, que son las que caben en fs/4, y
+ * así la media tasa ya no pliega las altas encima. La libmad original no tiene estas opciones: ahí MONO mezcla las
+ * subbandas (mix_to_mono) y HALF es la synth_half de libmad sin más. Los tres perfiles reducidos usan además la ventana de 16x16
+ * bits (src/synth_kernels.h; unos 60 dB de SNR contra la exacta). FULL sigue idéntico a libmad.
+ */
+static void set_layer3_options(DecProfile profile)
+{
+#if defined(MP368K_L3)
+    mp368k_l3_mono = profile == DEC_PROFILE_MONO || profile == DEC_PROFILE_HALF_MONO;
+    mp368k_l3_maxsb = profile == DEC_PROFILE_HALF || profile == DEC_PROFILE_HALF_MONO ? 16 : 32;
+    mp368k_synth_lowprec = profile != DEC_PROFILE_FULL;
+#else
+    (void)profile;
+#endif
+}
+
 /* Pasos de un frame ya decodificado en sFrame; comparten dec_run y el flujo. */
 static void step_mix(int want_mono)
 {
@@ -202,6 +224,7 @@ int dec_run(const uint8_t *data, size_t size, const DecConfig *cfg, DecResult *o
     sFrame.overlap = &sOverlap;
     if (want_half)
         sStream.options |= MAD_OPTION_HALFSAMPLERATE;
+    set_layer3_options(cfg->profile);
 
     mad_stream_buffer(&sStream, data + skip, size - skip);
 
@@ -316,6 +339,7 @@ static void stream_reset_libmad(DecProfile profile)
     if (profile == DEC_PROFILE_HALF || profile == DEC_PROFILE_HALF_MONO)
         sStream.options |= MAD_OPTION_HALFSAMPLERATE;
     sWantMono = profile == DEC_PROFILE_MONO || profile == DEC_PROFILE_HALF_MONO;
+    set_layer3_options(profile);
 }
 
 int dec_stream_open(DecProfile profile, DecReadFn read, DecSeekFn seek, void *ctx,

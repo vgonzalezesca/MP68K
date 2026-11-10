@@ -1,0 +1,202 @@
+--- a/layer3.c
++++ b/layer3.c
+@@ -50,12 +50,24 @@
+ #  include "synth_kernels.h"
+ # endif
+ # include "mp368k_eq.h"
++# include "mp368k_l3.h"
+ 
+ /* --- Layer III ----------------------------------------------------------- */
+ 
+ /* mp368k: gancho del ecualizador (NULL = no hace nada; ver mp368k_eq.h) */
+ void (*mp368k_eq_hook)(mad_fixed_t [576], unsigned int, int) = 0;
+ 
++/* mp368k: opciones de la capa III (ver mp368k_l3.h); con sus valores por omisión el PCM es el de libmad */
++int mp368k_l3_mono = 0;
++unsigned int mp368k_l3_maxsb = 32;
++
++/* mp368k: fin de la zona no nula que dejó III_huffdecode (desde ahí hasta 576 todo es cero) */
++static unsigned int mp368k_nz;
++/* mp368k: el estéreo M/S solo recorre las líneas por debajo de este límite (las de arriba valen cero) */
++static unsigned int mp368k_ms_end = 576;
++/* mp368k: en mono, 1 si overlap[0] y overlap[1] guardan las colas de L y R; 0 si overlap[0] guarda la de (L+R)/2 */
++static int mp368k_ovl_split;
++
+ enum {
+   count1table_select = 0x01,
+   scalefac_scale     = 0x02,
+@@ -1268,6 +1280,8 @@
+     fprintf(stderr, "%d stuffing bits\n", cachesz + bits_left);
+ # endif
+ 
++  mp368k_nz = xrptr - xr;
++
+   /* rzero */
+   while (xrptr < &xr[576]) {
+     xrptr[0] = 0;
+@@ -1521,7 +1535,7 @@
+ 
+     invsqrt2 = root_table[3 + -2];
+ 
+-    for (sfbi = l = 0; l < 576; ++sfbi, l += n) {
++    for (sfbi = l = 0; l < mp368k_ms_end; ++sfbi, l += n) {
+       n = sfbwidth[sfbi];
+ 
+       if (modes[sfbi] != MS_STEREO)
+@@ -2388,11 +2402,28 @@
+     mad_fixed_t xr[2][576];
+     unsigned int ch;
+     enum mad_error error;
++    /*
++     * mp368k: nz[ch] = líneas desde las que todo vale cero (en el orden de los datos); mono = sacar (L+R)/2 en el canal 0;
++     * msonly = estéreo M/S puro: (L+R)/2 = M/sqrt(2), así que el canal S ni se decodifica (se saltan sus bits);
++     * nproc = canales que pasan por la IMDCT y la síntesis; mixsb = mezclar las subbandas al final (bloques distintos).
++     */
++    unsigned int nz[2] = { 576, 576 }, nproc = nch, mixsb = 0;
++    int mono = mp368k_l3_mono && nch == 2;
++    int msonly = mono && header->mode == MAD_MODE_JOINT_STEREO &&
++      (header->mode_extension & (I_STEREO | MS_STEREO)) == MS_STEREO &&
++      granule->ch[0].block_type == granule->ch[1].block_type &&
++      (granule->ch[0].flags & mixed_block_flag) == (granule->ch[1].flags & mixed_block_flag);
+ 
+     for (ch = 0; ch < nch; ++ch) {
+       struct channel *channel = &granule->ch[ch];
+       unsigned int part2_length;
+ 
++      if (ch == 1 && msonly) {
++	mad_bit_skip(ptr, channel->part2_3_length);
++	nz[1] = 0;
++	break;
++      }
++
+       sfbwidth[ch] = sfbwidth_table[sfreqi].l;
+       if (channel->block_type == 2) {
+ 	sfbwidth[ch] = (channel->flags & mixed_block_flag) ?
+@@ -2412,19 +2443,69 @@
+       error = III_huffdecode(ptr, xr[ch], channel, sfbwidth[ch], part2_length);
+       if (error)
+ 	return error;
++      nz[ch] = mp368k_nz;
+     }
+ 
+     /* joint stereo processing */
+ 
+-    if (header->mode == MAD_MODE_JOINT_STEREO && header->mode_extension) {
++    if (msonly) {
++      /* mp368k: (L+R)/2 = M/sqrt(2), con la misma constante que el M/S de libmad */
++      mad_fixed_t const invsqrt2 = root_table[3 + -2];
++
++      header->flags |= MAD_FLAG_MS_STEREO;
++      for (ch = 0; ch < nz[0]; ++ch)
++	xr[0][ch] = mad_f_mul(xr[0][ch], invsqrt2);
++    }
++    else if (header->mode == MAD_MODE_JOINT_STEREO && header->mode_extension) {
++      unsigned int top = nz[0] > nz[1] ? nz[0] : nz[1];
++
++      /* mp368k: sobre la zona no nula de los dos canales; el M/S de ceros da ceros */
++      mp368k_ms_end = top;
+       error = III_stereo(xr, granule, header, sfbwidth[0]);
++      mp368k_ms_end = 576;
+       if (error)
+ 	return error;
++      nz[0] = nz[1] = (header->mode_extension & I_STEREO) ? 576 : top;
++    }
++
++    if (mono) {
++      if (msonly || (granule->ch[0].block_type == granule->ch[1].block_type &&
++		     (granule->ch[0].flags & mixed_block_flag) == (granule->ch[1].flags & mixed_block_flag))) {
++	/* mp368k: mezcla en frecuencia (la IMDCT es lineal); un solo canal sigue adelante */
++	if (!msonly) {
++	  unsigned int top = nz[0] > nz[1] ? nz[0] : nz[1];
++
++	  for (ch = 0; ch < top; ++ch)
++	    xr[0][ch] = (xr[0][ch] + xr[1][ch]) >> 1;
++	  nz[0] = top;
++	}
++	if (mp368k_ovl_split) {
++	  /* la cola de (L+R)/2 es la mitad de la suma de las colas de L y de R */
++	  mad_fixed_t *o0 = &(*frame->overlap)[0][0][0], *o1 = &(*frame->overlap)[1][0][0];
++
++	  for (ch = 0; ch < 32 * 18; ++ch)
++	    o0[ch] = (o0[ch] + o1[ch]) >> 1;
++	  mp368k_ovl_split = 0;
++	}
++	nproc = 1;
++      }
++      else {
++	/* mp368k: bloques distintos en L y R (solo en estéreo simple): los dos canales y se mezclan las subbandas */
++	if (!mp368k_ovl_split) {
++	  mad_fixed_t *o0 = &(*frame->overlap)[0][0][0], *o1 = &(*frame->overlap)[1][0][0];
++
++	  /* las dos colas valen la de (L+R)/2: al mezclar, (L + cola + R + cola)/2 = (L+R)/2 + cola */
++	  for (ch = 0; ch < 32 * 18; ++ch)
++	    o1[ch] = o0[ch];
++	  mp368k_ovl_split = 1;
++	}
++	mixsb = 1;
++      }
+     }
+ 
+     /* reordering, alias reduction, IMDCT, overlap-add, frequency inversion */
+ 
+-    for (ch = 0; ch < nch; ++ch) {
++    for (ch = 0; ch < nproc; ++ch) {
+       struct channel const *channel = &granule->ch[ch];
+       mad_fixed_t (*sample)[32] = &frame->sbsample[ch][18 * gr];
+       unsigned int sb, l, i, sblimit;
+@@ -2449,9 +2530,17 @@
+ 			 (channel->flags & mixed_block_flag) ? 2 : 1);
+       }
+       else {
++	unsigned int lines = nz[ch] + 8 < 576 ? nz[ch] + 8 : 576;
++
+ 	if (mp368k_eq_hook)
+ 	  mp368k_eq_hook(xr[ch], header->samplerate, 0);
+-	III_aliasreduce(xr[ch], 576);
++	/*
++	 * mp368k: las mariposas de la frontera 18k tocan las líneas 18k-8..18k+7; si todas están en la zona de ceros, dan
++	 * ceros (resultado idéntico). Con mp368k_l3_maxsb < 32 tampoco se cruza la frontera de la última subbanda.
++	 */
++	if (lines > 18 * mp368k_l3_maxsb)
++	  lines = 18 * mp368k_l3_maxsb;
++	III_aliasreduce(xr[ch], lines);
+       }
+ 
+       l = 0;
+@@ -2490,11 +2579,14 @@
+ 
+       /* (nonzero) subbands 2-31 */
+ 
+-      i = 576;
++      /* mp368k: la alias-reduction no deja nada distinto de cero más allá de nz + 14 (bloques largos) */
++      i = channel->block_type != 2 && nz[ch] + 15 < 576 ? nz[ch] + 15 : 576;
+       while (i > 36 && xr[ch][i - 1] == 0)
+ 	--i;
+ 
+       sblimit = 32 - (576 - i) / 18;
++      if (sblimit > mp368k_l3_maxsb)
++	sblimit = mp368k_l3_maxsb;
+ 
+       if (channel->block_type != 2) {
+ 	/* long blocks */
+@@ -2533,8 +2625,20 @@
+ 	  III_freqinver(sample, sb);
+       }
+     }
++
++    if (mixsb) {
++      /* mp368k: mono con bloques distintos en L y R: se mezclan las subbandas de este granulo */
++      mad_fixed_t *s0 = &frame->sbsample[0][18 * gr][0], *s1 = &frame->sbsample[1][18 * gr][0];
++
++      for (ch = 0; ch < 18 * 32; ++ch)
++	s0[ch] = (s0[ch] + s1[ch]) >> 1;
++    }
+   }
+ 
++  /* mp368k: en mono la síntesis trabaja con un solo canal */
++  if (mp368k_l3_mono && nch == 2)
++    header->mode = MAD_MODE_SINGLE_CHANNEL;
++
+   return MAD_ERROR_NONE;
+ }
+ 

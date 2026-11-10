@@ -41,12 +41,35 @@ void mp368k_synth_window_half_040(const int32_t *fx, const int32_t *fe, const in
                                   const int32_t *D, unsigned int pe, unsigned int po, int32_t *pcm);
 
 /*
+ * Ventana de media tasa de PRECISIÓN REDUCIDA, para los perfiles HALF y HALF_MONO (no para FULL, que sigue exacto a libmad):
+ * cada producto es (x >> 16) * D16 en enteros de 16x16->32 bits (muls.w en el 68040: 16 ciclos frente a 20 de muls.l, y sin
+ * desplazamientos), sumados en 32 bits con envoltura; la salida es la suma << 2, en la misma escala que la exacta. La señal entra
+ * con unos 12 bits (x en Q28 >> 16) y la ventana con 14, lo que deja el error muy por debajo del de la media tasa misma (medido
+ * en tests/host/check_codecs.py). D16[i] = (D[i] + 2) >> 2, con D la tabla de libmad (17 filas de 32, ya desplazada 12 bits); la
+ * arma una sola vez la copia parcheada de synth.c, con el mismo orden de filas, así que pe, po y los índices son los de la exacta.
+ */
+void mp368k_synth_window_half16_ref(const int32_t *fx, const int32_t *fe, const int32_t *fo,
+                                    const int16_t *D16, unsigned int pe, unsigned int po, int32_t *pcm);
+void mp368k_synth_window_half16_040(const int32_t *fx, const int32_t *fe, const int32_t *fo,
+                                    const int16_t *D16, unsigned int pe, unsigned int po, int32_t *pcm);
+/* La ventana COMPLETA (32 muestras) con la misma aritmética de 16x16 bits, para el perfil MONO (44,1 kHz mono). */
+void mp368k_synth_window_full16_ref(const int32_t *fx, const int32_t *fe, const int32_t *fo,
+                                    const int16_t *D16, unsigned int pe, unsigned int po, int32_t *pcm);
+void mp368k_synth_window_full16_040(const int32_t *fx, const int32_t *fe, const int32_t *fo,
+                                    const int16_t *D16, unsigned int pe, unsigned int po, int32_t *pcm);
+
+/*
  * DCT de 32 puntos (el dct32 de libmad): in[32] -> lo[i][slot] y hi[i][slot], i = 0..15, con lo/hi de [16][8].
  * Aritmética de 32 bits con envoltura; cada producto es (int32)(((int64)x*y) >> 28). Referencia GENERADA
  * (src/dct32_ref.c) y kernel asm GENERADO (targets/asm/dct32_040.s) desde el mismo texto de libmad.
  */
 void mp368k_dct32_ref(const int32_t in[32], unsigned int slot, int32_t lo[16][8], int32_t hi[16][8]);
 void mp368k_dct32_040(const int32_t in[32], unsigned int slot, int32_t lo[16][8], int32_t hi[16][8]);
+/*
+ * El mismo DCT para la síntesis de MEDIA TASA: solo escribe las filas que synth_half lee (lo[0], lo[2], ..., lo[14] y hi[1], hi[3],
+ * ..., hi[15]), con los mismos bits que mp368k_dct32_ref; las demás filas quedan como estaban. Su referencia es mp368k_dct32_ref.
+ */
+void mp368k_dct32_half_040(const int32_t in[32], unsigned int slot, int32_t lo[16][8], int32_t hi[16][8]);
 
 /*
  * IMDCT de una subbanda de un bloque LARGO normal (block_type 0), con ventana, solapado y, si invert != 0, inversión

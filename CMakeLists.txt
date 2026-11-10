@@ -182,14 +182,6 @@ if(decprofile IN_LIST MP368K_APPS)
     target_link_libraries(decprofile decoder_core_prof mp368k_common)
 endif()
 
-# --- Etapa 5a: prueba del camino de audio -------------------------------------
-if(audiotest IN_LIST MP368K_APPS)
-    add_application(audiotest
-        src/player/audiotest.c
-        CONSOLE
-        CREATOR "M368")
-    target_link_libraries(audiotest decoder_core mp368k_common)
-endif()
 
 # --- Etapa 6: capa de códecs (MP3, FLAC) ---------------------------------------
 # dr_flac (dominio público/MIT-0, third_party/dr_libs) se usa con una copia sin `double` que genera
@@ -213,7 +205,9 @@ set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
     ${CMAKE_SOURCE_DIR}/third_party/patches/libmad-0.15.1b-eq.patch
     ${CMAKE_SOURCE_DIR}/third_party/patches/libmad-0.15.1b-synth.patch
     ${CMAKE_SOURCE_DIR}/third_party/patches/libmad-0.15.1b-imdct.patch
-    ${CMAKE_SOURCE_DIR}/third_party/patches/mp368k_eq.h)
+    ${CMAKE_SOURCE_DIR}/third_party/patches/libmad-0.15.1b-l3.patch
+    ${CMAKE_SOURCE_DIR}/third_party/patches/mp368k_eq.h
+    ${CMAKE_SOURCE_DIR}/third_party/patches/mp368k_l3.h)
 execute_process(
     COMMAND ${CMAKE_SOURCE_DIR}/tools/prepare-libmad-eq.sh ${MAD_EQ_DIR}
     RESULT_VARIABLE MAD_EQ_RESULT)
@@ -266,6 +260,12 @@ set(WMA_SOURCES
 # (codecbench_ref). Selector de compilación: -DMP368K_ASM=OFF vuelve a C.
 function(mp368k_codec_stack SFX KERNEL_LABEL)
     cmake_parse_arguments(K "" "" "SOURCES;DEFS;COREDEFS;CODECDEFS;WMASOURCES;WMADEFS" ${ARGN})
+    # Las ventanas de 16x16 bits de los perfiles reducidos no existen en la libmad original: sin asm se usan sus referencias en C.
+    if(NOT K_DEFS MATCHES "MP368K_SYNTH_WINDOW_HALF16=")
+        list(APPEND K_SOURCES src/synth_ref.c)
+        list(APPEND K_DEFS MP368K_SYNTH_WINDOW_HALF16=mp368k_synth_window_half16_ref
+            MP368K_SYNTH_WINDOW_FULL16=mp368k_synth_window_full16_ref)
+    endif()
     add_library(mad_eq${SFX} STATIC
         ${MAD_EQ_DIR}/bit.c ${MAD_EQ_DIR}/fixed.c ${MAD_EQ_DIR}/frame.c ${MAD_EQ_DIR}/huffman.c
         ${MAD_EQ_DIR}/layer12.c ${MAD_EQ_DIR}/layer3.c ${MAD_EQ_DIR}/stream.c ${MAD_EQ_DIR}/synth.c
@@ -284,6 +284,8 @@ function(mp368k_codec_stack SFX KERNEL_LABEL)
 
     add_library(decoder_core_eq${SFX} STATIC src/decoder_core.c)
     target_include_directories(decoder_core_eq${SFX} PUBLIC src)
+    target_include_directories(decoder_core_eq${SFX} PRIVATE ${MAD_EQ_DIR})
+    target_compile_definitions(decoder_core_eq${SFX} PRIVATE MP368K_L3)
     if(K_COREDEFS)
         target_compile_definitions(decoder_core_eq${SFX} PRIVATE ${K_COREDEFS})
     endif()
@@ -314,6 +316,29 @@ endif()
 set_source_files_properties(src/dr_flac_impl.c PROPERTIES COMPILE_OPTIONS -w)
 set_source_files_properties(src/codec_vorbis.c PROPERTIES COMPILE_OPTIONS "-I${TREMOR_DIR};-DMP368K_TREMOR")
 set_source_files_properties(src/codec_wma.c PROPERTIES COMPILE_OPTIONS "-I${WMA_DIR};-I${WMA_DIR}/codecs/lib;-DROCKBOX")
+
+# --- Etapa 5a: prueba del camino de audio, con la pila del reproductor -----------
+# audiotest decodifica como el reproductor (núcleos asm si los hay); audiotest_ref, con la pila en C, para comparar.
+if(audiotest IN_LIST MP368K_APPS)
+    add_application(audiotest
+        src/player/audiotest.c
+        CONSOLE
+        CREATOR "M368")
+    if(MP368K_HAVE_REF_STACK)
+        target_compile_definitions(audiotest PRIVATE MP368K_SYNTH_KERNEL_LABEL="asm")
+    else()
+        target_compile_definitions(audiotest PRIVATE MP368K_SYNTH_KERNEL_LABEL="c")
+    endif()
+    target_link_libraries(audiotest decoder_core_eq mp368k_common)
+endif()
+if(MP368K_HAVE_REF_STACK AND audiotest_ref IN_LIST MP368K_APPS)
+    add_application(audiotest_ref
+        src/player/audiotest.c
+        CONSOLE
+        CREATOR "M368")
+    target_compile_definitions(audiotest_ref PRIVATE AUDIOTEST_OUT_NAME="audiotest_results_ref.txt" MP368K_SYNTH_KERNEL_LABEL="c")
+    target_link_libraries(audiotest_ref decoder_core_eq_ref mp368k_common)
+endif()
 
 # --- Etapa 6: banco de los códecs (velocidad y CRC contra el PC, sin audio) ------
 if(codecbench IN_LIST MP368K_APPS)

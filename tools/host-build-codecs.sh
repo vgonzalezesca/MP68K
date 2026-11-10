@@ -22,7 +22,9 @@ LIB=(bit fixed frame huffman layer12 layer3 stream synth timer version)
 SYNTH_DEF=(-DMP368K_SYNTH_WINDOW=mp368k_synth_window_full_ref -DMP368K_SYNTH_WINDOW_HALF=mp368k_synth_window_half_ref -DMP368K_DCT32=mp368k_dct32_ref -DMP368K_IMDCT_L=mp368k_imdct_l_ref)
 SYNTH_SRC=(src/synth_ref.c src/dct32_ref.c src/imdct_ref.c)
 PCM_DEF=(-DMP368K_PCM_SCALE16=mp368k_pcm_scale16_ref)
-if [[ ${MP368K_SYNTH_KERNEL:-on} == off ]]; then SYNTH_DEF=(); SYNTH_SRC=(); PCM_DEF=(); fi
+if [[ ${MP368K_SYNTH_KERNEL:-on} == off ]]; then SYNTH_DEF=(); SYNTH_SRC=(src/synth_ref.c); PCM_DEF=(); fi
+# las ventanas de 16x16 bits de HALF, MONO y HALF_MONO no existen en la libmad original: siempre sus referencias en C
+SYNTH_DEF+=(-DMP368K_SYNTH_WINDOW_HALF16=mp368k_synth_window_half16_ref -DMP368K_SYNTH_WINDOW_FULL16=mp368k_synth_window_full16_ref)
 WMA=$B/libwma                   # libwma (Rockbox) con el float reemplazado y cabeceras de reemplazo (ADR-009)
 "$ROOT/tools/prepare-libwma.sh" "$WMA"
 WMA_LIB=(wmadeci wmafixed ffmpeg_bitstream mdct mdct_lookup fft-ffmpeg)
@@ -50,7 +52,7 @@ build() {
     done
     for f in "${OURS[@]}"; do
         local o=$d/$(basename "$f" .c).o
-        gcc "${common[@]}" -I"$TREM" -I"$WMA" -I"$WMA/codecs/lib" -DROCKBOX -DMP368K_TREMOR -DMP368K_EQ_STATS -fwrapv -Wall -Wextra -Wno-unused-parameter -Wno-multichar -c "$ROOT/$f" -o "$o"; objs+=("$o")
+        gcc "${common[@]}" -I"$TREM" -I"$WMA" -I"$WMA/codecs/lib" -DROCKBOX -DMP368K_TREMOR -DMP368K_EQ_STATS -DMP368K_L3 -fwrapv -Wall -Wextra -Wno-unused-parameter -Wno-multichar -c "$ROOT/$f" -o "$o"; objs+=("$o")
     done
     gcc $flag "${objs[@]}" -o "$B/test_codecs$bits"
     # Prueba unitaria del ecualizador (no necesita libmad: define un gancho ficticio).

@@ -342,22 +342,57 @@ def main():
             rc, kv = run(binary, "decode", wpath, os.path.join(tmp, "o.raw"), 0, 16)
             check(f"[{bits}] arena de 16 KB: error de memoria limpio (open:-4)", kv.get("error") == "open:-4", str(kv))
 
-        print("== MP3 por la capa nueva: mismo PCM que hostdec")
+        print("== MP3 por la capa nueva: FULL idéntico a hostdec; MONO y HALF con la capa III de MP368K")
+        # FULL debe ser bit a bit el de libmad. MONO mezcla L y R antes de la IMDCT y usa la ventana de 16x16 bits: contra (L+R)/2
+        # del FULL debe quedar sobre 55 dB de SNR (la ventana sola da unos 60).
+        # HALF y HALF_MONO dejan pasar solo las 16 subbandas bajas: se comparan con el FULL (o su mezcla) filtrado a fs/2 por
+        # sox, y deben quedar sobre 35 dB y al menos 10 dB mejor que la synth_half de libmad, que pliega las subbandas altas.
+        def snr_db(x, r):
+            m = min(len(x), len(r))
+            x, r = x[:m].astype(np.float64), r[:m].astype(np.float64)
+            return 10 * np.log10((r ** 2).sum() / max(((x - r) ** 2).sum(), 1.0))
+
+        def sox22(pcm, ch, rate):
+            a, b = os.path.join(tmp, "s_in.raw"), os.path.join(tmp, "s_out.raw")
+            pcm.astype("<i2").tofile(a)
+            subprocess.run(["sox", "-t", "raw", "-r", str(rate), "-e", "signed", "-b", "16", "-c", str(ch), a,
+                            "-t", "raw", b, "rate", "-v", "-a", str(rate // 2)], check=True)
+            return np.fromfile(b, dtype="<i2")
+
         prof = {"FULL": 0, "HALF": 1, "MONO": 2, "HALF_MONO": 3}
         for name in ("test128.mp3", "testmono.mp3", "testvbr.mp3"):
+            fullref = os.path.join(BH, "pcm", f"{name}.FULL.raw")
+            if not os.path.exists(fullref):
+                continue
+            ref = np.fromfile(fullref, dtype="<i2")
+            info = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "stream=channels,sample_rate", "-of", "csv=p=0",
+                                   os.path.join(DATA, name)], capture_output=True, text=True).stdout.split(",")
+            rate, ch = int(info[0]), int(info[1])
+            mix = ((ref.reshape(-1, 2).astype(np.int64).sum(axis=1)) >> 1).astype(np.int16) if ch == 2 else ref
+            r_half, r_hmono = sox22(ref, ch, rate)[:200000 * ch], sox22(mix, 1, rate)[:200000]
+            old_half = np.fromfile(os.path.join(BH, "pcm", f"{name}.HALF.raw"), dtype="<i2")[:200000 * ch]
             for pname, pid in prof.items():
-                refpath = os.path.join(BH, "pcm", f"{name}.{pname}.raw")
-                if not os.path.exists(refpath):
-                    continue
-                ref = np.fromfile(refpath, dtype="<i2")
                 for bits, binary in BINS.items():
                     out = os.path.join(tmp, "out.raw")
                     rc, kv = run(binary, "decode", os.path.join(DATA, name), out, pid)
                     got = np.fromfile(out, dtype="<i2")
-                    n = min(len(got), len(ref))
-                    # dec_run pierde el último frame (sin los 8 bytes de cola); el flujo no.
-                    ok = rc == 0 and n > 0 and np.array_equal(got[:n], ref[:n]) and 0 <= len(got) - len(ref) <= 2304
-                    check(f"[{bits}] {name} {pname}", ok, f"rc={rc} got={len(got)} ref={len(ref)}")
+                    if pname == "FULL":
+                        n = min(len(got), len(ref))
+                        # dec_run pierde el último frame (sin los 8 bytes de cola); el flujo no.
+                        ok = rc == 0 and n > 0 and np.array_equal(got[:n], ref[:n]) and 0 <= len(got) - len(ref) <= 2304
+                        check(f"[{bits}] {name} FULL: idéntico a hostdec", ok, f"rc={rc} got={len(got)} ref={len(ref)}")
+                    elif pname == "MONO":
+                        n = min(len(got), len(mix))
+                        e = snr_db(got[:n], mix[:n]) if n else 0.0
+                        d = int(np.abs(got[:n].astype(np.int64) - mix[:n]).max()) if n else 99
+                        check(f"[{bits}] {name} MONO: SNR {e:.1f} dB contra (L+R)/2 del FULL (>= 55; error máx. {d} LSB)",
+                              rc == 0 and n > 0 and e >= 55, f"rc={rc}")
+                    else:
+                        r = r_half if pname == "HALF" else r_hmono
+                        e = snr_db(got[:len(r)], r)
+                        floor = snr_db(old_half, r_half) + 10 if pname == "HALF" else 0
+                        check(f"[{bits}] {name} {pname}: SNR {e:.1f} dB contra el filtrado a fs/2 (>= 35 y >= {floor:.1f})",
+                              rc == 0 and e >= 35 and e >= floor, f"rc={rc}")
 
         print("== robustez (no deben colgarse ni caerse)")
         flac = open(os.path.join(DATA, "testflac.flac"), "rb").read()

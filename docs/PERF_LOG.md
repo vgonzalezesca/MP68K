@@ -34,9 +34,9 @@ Decisión derivada:
 
 | Operación | Ciclos estimados (LC 580) | Fuente | Estado |
 |---|---|---|---|
-| MULS.L 32×32→32 |  | medición | sin medir |
-| MULS.L 32×32→64 |  | medición | sin medir |
-| MULS.W 16×16→32 |  | medición | sin medir |
+| MULS.L 32×32→32 | (Snow: 20) | medición | sin medir en el LC 580 |
+| MULS.L 32×32→64 | (Snow: 20) | medición | sin medir en el LC 580 |
+| MULS.W 16×16→32 | (Snow: 16) | medición | sin medir en el LC 580 |
 | MOVE16 (por 16 bytes) |  | medición | sin medir |
 | Lectura secuencial 8 KB |  | medición | sin medir |
 | Lectura con tabla 16 KB |  | medición | sin medir |
@@ -112,7 +112,58 @@ instrucciones de costos muy distintos (`muls.l` 32×32→64, divisiones, saltos)
 
 Los casos de FLAC salen de `targets/asm-test.sh flac_e2e` (la primera vez que dr_flac corre como 68040 big-endian bajo QEMU: los 4 CRC coinciden con el PC). `memcpy`, `memmove`, `memset` y `qsort` de mp368k minilibc son bucles de bytes (más lentos que los de la libc real) y se separan en el informe.
 
+## Modelo de ciclos bajo QEMU, calibrado con Snow (NO es tiempo medido)
+
+Desde 2026-11-09, `targets/asm-prof.sh` cobra a cada instrucción ejecutada su tiempo de la sección 10 del MC68040UM tal como lo cobra el
+emulador **Snow** (leído en su `core/src/cpu_m68k/timing040.rs`, commit `178a122`: `muls.l` 20, `muls.w` 16, desplazamientos 2-4, salto tomado 2
+y no tomado 3, modos indexados 3-4, casi todo lo demás 1) y simula el caché de instrucciones de 4 KB. **No modela el caché de datos** (QEMU no da las
+direcciones de los datos). Calibración contra `audiotest` en Snow (build `2e4aa2c`, libmad en C, ver el registro de abajo): el modelo da 248 % (FULL)
+y 184 % (HALF) donde Snow midió 311 % y 231 %, es decir **Snow ≈ 1,25 × modelo** en los dos casos. "Cuadro" = un instante de entrada (en estéreo, un par);
+presupuesto a 44,1 kHz y 33,33 MHz: 756 ciclos por cuadro. Todo es MP3 de 128 kbps estéreo (`test128.mp3`), con los perfiles del reproductor.
+
+| Perfil (2026-11-09, núcleos asm) | Antes de la ronda 4 | Después | × 1,25 (estimación para Snow) | Qué cambió |
+|---|---|---|---|---|
+| FULL (idéntico a libmad) | 217 % | **206 %** | ~258 % | zona no nula en alias y M/S |
+| HALF (22 kHz estéreo) | 154 % | **101 %** | ~126 % | DCT de media tasa, 16 subbandas, ventana de 16 bits |
+| MONO (44 kHz mono) | ~140 % | **88 %** | ~110 % | mezcla antes de la IMDCT, sin canal S en M/S, ventana de 16 bits |
+| HALF_MONO (22 kHz mono) | ~100 % | **52 %** | ~65 % | todo lo anterior |
+
+Las columnas "× 1,25" son una extrapolación con un solo punto de calibración (y con la libmad en C, no con los núcleos asm): **sin medir**. Lo que sí
+miden Snow y, sobre todo, el LC 580 se registra abajo.
+
 ## Registro cronológico
+
+### 2026-11-09 — `microbench` y `audiotest` en Snow (Infinite Mac, Quadra 800)
+Equipo: **emulador Snow** (Infinite Mac); Gestalt mach=35 (Quadra 800), proc=5 (68040), fpu=3, 40 MB. **No es el LC 580.**
+System: 8.1 (0x810)   Build: 68k-2e4aa2c   Flags: -m68040 -msoft-float -O2 -fomit-frame-pointer -ffunction-sections -fdata-sections
+`audiotest` de ese build decodifica con la **libmad original en C** (no con los núcleos asm). Sonido: Sound Manager 3.2, el hardware emulado solo ofrece 8 bits.
+
+| Prueba (`microbench`, mínimo de 5 pasadas, 33 MHz supuestos) | ns/op | ciclos/op |
+|---|---|---|
+| `muls.l` 32×32→32 independientes / dependientes | 601,7 / 602,0 | 19,85 / 19,86 |
+| `muls.l` 32×32→64 | 601,8 | 19,85 |
+| `muls.w` 16×16→32 | 481,5 | 15,88 |
+| lectura secuencial 1 / 4 / 8 / 64 KB (por palabra larga, bruto) | 42,2 / 73,5 / 122,3 / 151,8 | 1,39 / 2,42 / 4,03 / 5,00 |
+| lectura con tabla 1-2 KB / 4 KB / 8-32 KB | 90 / 127 / 542-547 | 3,0 / 4,2 / 17,9-18,1 |
+| copia de 16 bytes, 1 KB: `move.l` / `movem` / `move16` | 253 / 366 / 1105 | 8,3 / 12,1 / 36,5 |
+| copia de 16 bytes, 64 KB: `move.l` / `movem` / `move16` | 1570 / 1656 / 1100 | 51,8 / 54,7 / 36,3 |
+
+| `audiotest` (15 s por pista) | decode_load | underruns | Observaciones |
+|---|---|---|---|
+| test128.mp3 FULL | 311 % (81,3 ms por frame de 26,1) | 321 | no es tiempo real |
+| test128.mp3 HALF | 253 % (231 % sin un frame atípico de 1,42 s) | 493 | |
+| test192.mp3 FULL | 311 % | 814 | |
+| testmono.mp3 FULL | 145 % | 1084 | |
+| test128.mp3 HALF, 8 bits forzado | 231 % | 1246 | |
+
+**Lo que sí dice.** Snow cobra `muls.l` 20 ciclos y `muls.w` 16, y muestra un caché de datos de 4 KB y el costo de los fallos: son exactamente los tiempos
+del MC68040UM que su código implementa (`timing040.rs`, `cache/m68040.rs`), así que **confirma el modelo de Snow, no el hardware**. Con 20 ciclos por `muls.l`,
+las ~49 multiplicaciones por cuadro del MP3 FULL ya cuestan ~980 ciclos de un presupuesto de 756: **FULL estéreo a 44,1 kHz no llega a tiempo real en un
+68040 de 33 MHz con la aritmética de libmad**, con o sin asm. El LC 580 tiene el mismo núcleo y reloj; su memoria y su video pueden hacerlo algo más lento
+que este Quadra 800, nunca bastante más rápido.
+**Lo que no dice.** Nada del LC 580 real. El archivo de `microbench` traía al final un trozo de la salida de `audiotest`; el programa borra y trunca su archivo al escribirlo
+(`src/common/textlog.c`), así que probablemente se juntó al copiarlo. Los datos de las dos pruebas se leyeron por separado.
+Decisión derivada: ronda 4 del ADR-014 (perfiles reducidos más baratos) y un modelo de ciclos calibrado con estas cifras (sección de arriba).
 
 ### 2026-11-08 — `codecbench` con los kernels asm, en emulador
 Equipo: **emulador (Infinite Mac)**; Gestalt dice mach=36, proc=5 (68040), 64 MB. **No es el LC 580: los tiempos no valen para velocidad.**
